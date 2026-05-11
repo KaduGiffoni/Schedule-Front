@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  /* Cores exatas do seu Workforce Pro */
+  --color-primary: #041627;
+  --color-secondary: #0058be;
+  --color-surface: #fbf9fa;
+  --color-surface-dim: #dbd9db;
+  --color-surface-container: #efedef;
+  --color-on-surface: #1b1c1d;
+  --color-on-surface-variant: #44474c;
+  --color-outline: #74777d;
+  --color-outline-variant: #c4c6cd;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+
+  /* Arredondamentos do seu DESIGN.md */
+  --radius-sm: 0.125rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}
+
+/* Reset básico para garantir o fundo do app */
+body {
+  background-color: var(--color-surface-container);
+  color: var(--color-on-surface);
+}
