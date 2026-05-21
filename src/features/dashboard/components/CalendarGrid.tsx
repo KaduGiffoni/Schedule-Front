@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { scheduleService } from "../api/scheduleService";
+import {
+  holidayService,
+  type Holiday,
+} from "../../settings/api/holidayService"; // 👇 Importamos a API de feriados
 import type { ScheduleDay } from "../types";
-import { X } from "lucide-react";
+import { X, PartyPopper } from "lucide-react";
 
 const TEAM_MAP: Record<number, string> = { 1: "A", 2: "B", 3: "C", 4: "D" };
 
@@ -42,14 +46,17 @@ interface CalendarGridProps {
   year: number;
   month: number;
   selectedTeam: number | null;
+  onDayHover?: (day: number | null) => void;
 }
 
 export const CalendarGrid = ({
   year,
   month,
   selectedTeam,
+  onDayHover,
 }: CalendarGridProps) => {
   const [shifts, setShifts] = useState<ScheduleDay[]>([]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]); // 👇 Estado para guardar os feriados
   const [isLoading, setIsLoading] = useState(true);
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
 
@@ -68,18 +75,24 @@ export const CalendarGrid = ({
   }, [expandedDay]);
 
   useEffect(() => {
-    const fetchEscala = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
-        const data = await scheduleService.getEscalaGeral(year, month);
-        setShifts(data);
+        // 👇 Promise.all faz as duas requisições ao mesmo tempo, deixando o sistema muito mais rápido!
+        const [escalaData, feriadosData] = await Promise.all([
+          scheduleService.getEscalaGeral(year, month),
+          holidayService.getAll().then(res => res.data).catch(() => []), // Se der erro nos feriados, não quebra a escala
+        ]);
+
+        setShifts(escalaData);
+        setHolidays(feriadosData);
       } catch (error) {
-        console.error("Erro ao carregar escala");
+        console.error("Erro ao carregar os dados do calendário:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchEscala();
+    fetchData();
   }, [year, month]);
 
   const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -96,7 +109,6 @@ export const CalendarGrid = ({
 
   return (
     <div className="flex-1 flex flex-col w-full rounded-3xl bg-[#f5f7fb] p-3 pb-6 shadow-inner relative min-h-0">
-      {/* HEADER FIXO */}
       <div className="grid grid-cols-7 gap-2 mb-2 shrink-0">
         {weekDays.map((day) => (
           <div
@@ -138,7 +150,16 @@ export const CalendarGrid = ({
               month === new Date().getMonth() + 1 &&
               year === new Date().getFullYear();
 
-            // 👇 Removido o filtro que cortava os itens. Agora carregamos todos!
+            // 👇 Verificação: Este dia é feriado?
+            const currentHoliday = holidays.find((h) => {
+              // Pegamos o YYYY-MM-DD com segurança para evitar problemas de fuso horário
+              const [hYear, hMonth, hDay] = h.date
+                .split("T")[0]
+                .split("-")
+                .map(Number);
+              return hYear === year && hMonth === month && hDay === day;
+            });
+
             const dayShifts = getShiftsForDay(day).sort((a, b) => {
               const nameA = a.shiftName
                 .normalize("NFD")
@@ -153,20 +174,38 @@ export const CalendarGrid = ({
               <div
                 key={day}
                 onClick={() => setExpandedDay(day)}
+                onMouseEnter={() => onDayHover && onDayHover(day)}
+                onMouseLeave={() => onDayHover && onDayHover(null)}
                 className={`
                   rounded-[12px] border bg-white py-1.5 px-2 flex flex-col overflow-hidden cursor-pointer
                   transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:ring-1 hover:ring-blue-200
-                  ${isToday ? "border-blue-500 shadow-blue-100 shadow-sm bg-[#fcfdff]" : "border-zinc-200"}
+                  ${isToday ? "border-blue-500 shadow-blue-100 shadow-sm bg-[#fcfdff]" : currentHoliday ? "border-amber-200 bg-[#fffbeb]/30" : "border-zinc-200"}
                 `}
               >
+                {/* 👇 TOPO DO DIA COM IDENTIFICAÇÃO DO FERIADO */}
                 <div className="flex items-center justify-between mb-1 shrink-0">
-                  <div
-                    className={`w-6 h-6 rounded-md flex items-center justify-center text-[12px] font-extrabold ${isToday ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"}`}
-                  >
-                    {day}
+                  <div className="flex items-center gap-1.5 overflow-hidden">
+                    <div
+                      className={`w-6 h-6 shrink-0 rounded-md flex items-center justify-center text-[12px] font-extrabold 
+                        ${isToday ? "bg-blue-600 text-white" : currentHoliday ? "bg-amber-500 text-white shadow-sm" : "bg-zinc-100 text-zinc-700"}
+                      `}
+                    >
+                      {day}
+                    </div>
+
+                    {/* Se for feriado e NÃO for o dia de hoje, exibe o nome do feriado na célula */}
+                    {currentHoliday && !isToday && (
+                      <span
+                        className="text-[9px] font-extrabold text-amber-600 truncate max-w-[55px] sm:max-w-[70px]"
+                        title={currentHoliday.name}
+                      >
+                        {currentHoliday.name}
+                      </span>
+                    )}
                   </div>
+
                   {isToday && (
-                    <div className="text-[9px] font-bold tracking-wide text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase">
+                    <div className="text-[9px] font-bold tracking-wide text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded uppercase shrink-0">
                       Hoje
                     </div>
                   )}
@@ -181,14 +220,12 @@ export const CalendarGrid = ({
                       SHIFT_STYLES[normalizedName] || SHIFT_STYLES["Folga"];
                     const teamName = TEAM_MAP[shift.letterId] || "?";
 
-                    // 👇 Lógica de destaque: Desfoca se houver uma equipa selecionada e não for ela
                     const isFaded =
                       selectedTeam !== null && shift.letterId !== selectedTeam;
 
                     return (
                       <div
                         key={shift.id}
-                        // Aplicando opacidade e escala de cinza suavemente
                         className={`rounded-md border px-1.5 py-[3px] shrink-0 transition-all duration-300 ${shiftStyle.card} ${isFaded ? "opacity-35 grayscale" : "opacity-100"}`}
                       >
                         <div className="flex items-center justify-between gap-1">
@@ -207,7 +244,9 @@ export const CalendarGrid = ({
                     );
                   })}
                   {dayShifts.length === 0 && (
-                    <div className="text-center text-[10px] font-medium text-zinc-400 py-1">
+                    <div
+                      className={`text-center text-[10px] font-medium py-1 ${currentHoliday ? "text-amber-500/70" : "text-zinc-400"}`}
+                    >
                       Sem escala
                     </div>
                   )}
@@ -226,7 +265,14 @@ export const CalendarGrid = ({
             month === new Date().getMonth() + 1 &&
             year === new Date().getFullYear();
 
-          // 👇 Modal também mostra todos, com efeito de desfoque
+          const modalHoliday = holidays.find((h) => {
+            const [hYear, hMonth, hDay] = h.date
+              .split("T")[0]
+              .split("-")
+              .map(Number);
+            return hYear === year && hMonth === month && hDay === expandedDay;
+          });
+
           const modalShifts = getShiftsForDay(expandedDay).sort((a, b) => {
             const nameA = a.shiftName
               .normalize("NFD")
@@ -259,17 +305,24 @@ export const CalendarGrid = ({
 
                 <div className="flex items-center gap-4 mb-6">
                   <div
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-extrabold shadow-sm ${isTodayModal ? "bg-blue-600 text-white" : "bg-zinc-100 text-zinc-700"}`}
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-extrabold shadow-sm ${isTodayModal ? "bg-blue-600 text-white" : modalHoliday ? "bg-amber-500 text-white" : "bg-zinc-100 text-zinc-700"}`}
                   >
                     {expandedDay}
                   </div>
                   <div>
-                    <h3 className="text-[16px] font-bold text-zinc-800 capitalize">
-                      {diaDaSemana}
+                    <h3 className="text-[16px] font-bold text-zinc-800 capitalize flex items-center gap-1.5">
+                      {diaDaSemana}{" "}
+                      {modalHoliday && (
+                        <PartyPopper size={14} className="text-amber-500" />
+                      )}
                     </h3>
                     <p className="text-[13px] font-medium text-zinc-500 mt-0.5">
                       {isTodayModal ? (
                         <span className="text-blue-600 font-bold">Hoje</span>
+                      ) : modalHoliday ? (
+                        <span className="text-amber-600 font-bold">
+                          {modalHoliday.name}
+                        </span>
                       ) : (
                         `Escala completa do dia`
                       )}
@@ -285,8 +338,6 @@ export const CalendarGrid = ({
                     const shiftStyle =
                       SHIFT_STYLES[normalizedName] || SHIFT_STYLES["Folga"];
                     const teamName = TEAM_MAP[shift.letterId] || "?";
-
-                    // 👇 Efeito de desfoque aplicado ao Modal também
                     const isFaded =
                       selectedTeam !== null && shift.letterId !== selectedTeam;
 

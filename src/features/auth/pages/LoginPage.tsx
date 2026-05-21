@@ -1,39 +1,43 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Building2 } from 'lucide-react';
-import { authService } from '../api/authService';
-import type { LoginRequest } from '../types';
-import { InputField } from '../../../components/ui/InputField';
-import { Button } from '../../../components/ui/Button';
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { Mail, Lock, Eye, EyeOff, Building2 } from "lucide-react";
+import { authService } from "../api/authService";
+import type { LoginRequest } from "../types";
+import { InputField } from "../../../components/ui/InputField";
+import { Button } from "../../../components/ui/Button";
 
-import { useAuthStore } from '../store/authStore'; 
+import { useAuthStore } from "../store/authStore";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  
+  const [errorMsg, setErrorMsg] = useState("");
+
   const navigate = useNavigate();
-  
+
   const setTokenAndEmail = useAuthStore((state) => state.setTokenAndEmail);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg('');
+    setErrorMsg("");
     setIsLoading(true);
 
     try {
       const requestData: LoginRequest = { email, password };
       const response = await authService.login(requestData);
-      
+
       // 👇 Guardamos no Zustand o Token que veio da API e o Email que o utilizador digitou!
       setTokenAndEmail(response.accessToken, email);
-      
+
+      // 👇 ADICIONE ESTAS DUAS LINHAS AQUI:
+      // Isso vai abastecer o Header e a ProfilePage com as informações reais do login!
+      localStorage.setItem("token", response.accessToken);
+      localStorage.setItem("userEmail", email);
+
       // Navegamos para o Dashboard com sucesso!
-      navigate('/dashboard');
-      
+      navigate("/dashboard");
     } catch (error: any) {
       setErrorMsg(error.message || "Erro inesperado ao conectar com a API.");
     } finally {
@@ -51,9 +55,7 @@ export default function LoginPage() {
           <h1 className="text-[24px] font-bold tracking-tight text-[#041627] leading-tight">
             NOC - Pro
           </h1>
-          <p className="text-[14px] text-[#44474c] mt-1">
-            Hub do NOC
-          </p>
+          <p className="text-[14px] text-[#44474c] mt-1">Hub do NOC</p>
         </div>
 
         <div className="p-6">
@@ -157,7 +159,10 @@ export default function LoginPage() {
           <p className="text-[14px] text-[#44474c]">
             Ainda não tem conta?{" "}
             {/* 👇 Aqui está o link mágico para a nossa nova página! */}
-            <Link to="/register" className="text-[#0058be] font-bold hover:underline">
+            <Link
+              to="/register"
+              className="text-[#0058be] font-bold hover:underline"
+            >
               Criar nova conta
             </Link>
           </p>

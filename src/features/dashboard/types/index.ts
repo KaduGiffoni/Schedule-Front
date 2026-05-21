@@ -10,3 +10,4 @@ export interface ScheduleDay {
   swappedWithUserName: string | null;
   swappedWithUserId: string | null;
 }
+
