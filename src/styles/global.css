@@ -1,37 +1,257 @@
 @import "tailwindcss";
 
+/* ============================================================
+   NOC-PRO Design System
+   Paleta: Dark-tech operacional | Azul elétrico | Geist Sans
+   ============================================================ */
+
+/* ── Geist Font via Google Fonts (carregado via index.html) ─── */
 @theme {
-  /* Cores exatas do seu Workforce Pro */
-  --color-primary: #041627;
-  --color-secondary: #0058be;
-  --color-surface: #fbf9fa;
-  --color-surface-dim: #dbd9db;
-  --color-surface-container: #efedef;
-  --color-on-surface: #1b1c1d;
-  --color-on-surface-variant: #44474c;
-  --color-outline: #74777d;
-  --color-outline-variant: #c4c6cd;
-  --color-error: #ba1a1a;
-  --color-error-container: #ffdad6;
-
-  /* Arredondamentos do seu DESIGN.md */
-  --radius-sm: 0.125rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
 }
 
-/* Reset básico para garantir o fundo do app */
+/* ── Custom Easings (Emil Kowalski) ─── */
+:root {
+  --ease-out-expo: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-expo: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TOKENS DE COR — LIGHT MODE (padrão)
+   ══════════════════════════════════════════════════════════════ */
+:root {
+  /* Backgrounds */
+  --color-bg:              oklch(97.5% 0.003 248);   /* #f5f7fa */
+  --color-surface:         oklch(100%   0     0);    /* #ffffff */
+  --color-surface-raised:  oklch(97%   0.004 248);   /* hover sutil */
+  --color-surface-dim:     oklch(94%   0.006 248);   /* inputs, seções */
+
+  /* Borders */
+  --color-border:          oklch(88%   0.008 248);   /* #e2e6ec */
+  --color-border-subtle:   oklch(93%   0.005 248);   /* divisores internos */
+
+  /* Text */
+  --color-text:            oklch(17%   0.012 248);   /* #1b1c1d */
+  --color-text-muted:      oklch(50%   0.012 248);   /* #44474c */
+  --color-text-faint:      oklch(67%   0.010 248);   /* #74777d */
+  --color-text-inverse:    oklch(98%   0.002 248);   /* sobre fundo escuro */
+
+  /* Accent — Azul Operacional */
+  --color-accent:          oklch(42%   0.18  260);   /* #0058be */
+  --color-accent-hover:    oklch(38%   0.18  260);   /* hover mais escuro */
+  --color-accent-subtle:   oklch(95%   0.04  260);   /* bg sutil de destaque */
+  --color-accent-text:     oklch(40%   0.18  260);   /* texto azul */
+  --color-accent-dim:      oklch(42%   0.18  260 / 12%); /* 12% opacity */
+
+  /* Status */
+  --color-error:           oklch(46%   0.22  22);    /* #ba1a1a */
+  --color-error-subtle:    oklch(95%   0.04  22);    /* #ffdad6 */
+  --color-warning:         oklch(75%   0.18  75);    /* amber */
+  --color-warning-subtle:  oklch(97%   0.05  85);    /* amber bg */
+  --color-success:         oklch(55%   0.18  150);   /* green */
+  --color-success-subtle:  oklch(95%   0.04  150);
+
+  /* Shift Colors */
+  --color-shift-morning:   oklch(68%   0.18  40);    /* laranja — Manhã */
+  --color-shift-morning-bg:oklch(97%   0.05  55);
+  --color-shift-afternoon: oklch(52%   0.18  255);   /* azul — Tarde */
+  --color-shift-afternoon-bg:oklch(96% 0.05  255);
+  --color-shift-night:     oklch(56%   0.18  300);   /* violeta — Noite */
+  --color-shift-night-bg:  oklch(97%   0.04  300);
+  --color-shift-off:       oklch(60%   0.006 248);   /* zinc — Folga */
+  --color-shift-off-bg:    oklch(95%   0.004 248);
+
+  /* Sidebar */
+  --color-sidebar-bg:      oklch(99%   0.002 248);
+  --color-sidebar-border:  oklch(90%   0.006 248);
+
+  /* Header */
+  --color-header-bg:       oklch(100%  0     0);
+  --color-header-border:   oklch(90%   0.006 248);
+
+  /* Shadows (tintadas com hue da paleta) */
+  --shadow-sm:   0 1px 2px  oklch(50% 0.01 248 / 6%);
+  --shadow-md:   0 4px 12px oklch(40% 0.01 248 / 8%);
+  --shadow-lg:   0 10px 40px oklch(30% 0.01 248 / 10%);
+  --shadow-dropdown: 0 8px 24px oklch(30% 0.02 260 / 12%),
+                     0 2px 8px  oklch(30% 0.02 260 / 8%);
+
+  /* Border Radius */
+  --radius-xs:  3px;
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-2xl: 20px;
+
+  /* Z-index Scale */
+  --z-dropdown:  100;
+  --z-sticky:    200;
+  --z-modal-bg:  300;
+  --z-modal:     400;
+  --z-toast:     500;
+  --z-tooltip:   600;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TOKENS DE COR — DARK MODE
+   ══════════════════════════════════════════════════════════════ */
+.dark {
+  /* Backgrounds */
+  --color-bg:              oklch(13%   0.010 248);   /* #0d1117 */
+  --color-surface:         oklch(16%   0.010 248);   /* #161b22 */
+  --color-surface-raised:  oklch(19%   0.010 248);   /* hover */
+  --color-surface-dim:     oklch(12%   0.008 248);   /* mais fundo */
+
+  /* Borders */
+  --color-border:          oklch(27%   0.010 248);   /* #30363d */
+  --color-border-subtle:   oklch(22%   0.008 248);   /* internal dividers */
+
+  /* Text */
+  --color-text:            oklch(93%   0.005 248);   /* #e6edf3 */
+  --color-text-muted:      oklch(68%   0.008 248);   /* #8b949e */
+  --color-text-faint:      oklch(52%   0.008 248);   /* #6e7681 */
+  --color-text-inverse:    oklch(13%   0.010 248);   /* sobre fundo claro */
+
+  /* Accent — Azul Elétrico para NOC */
+  --color-accent:          oklch(62%   0.18  258);   /* #388bfd */
+  --color-accent-hover:    oklch(67%   0.18  258);   /* mais claro no dark */
+  --color-accent-subtle:   oklch(20%   0.05  258);   /* bg sutil */
+  --color-accent-text:     oklch(67%   0.18  258);   /* texto azul */
+  --color-accent-dim:      oklch(62%   0.18  258 / 15%);
+
+  /* Status */
+  --color-error:           oklch(65%   0.20  22);    /* #f85149 */
+  --color-error-subtle:    oklch(18%   0.06  22);
+  --color-warning:         oklch(80%   0.14  75);
+  --color-warning-subtle:  oklch(18%   0.05  75);
+  --color-success:         oklch(72%   0.16  150);
+  --color-success-subtle:  oklch(18%   0.05  150);
+
+  /* Shift Colors — mais luminosos no dark */
+  --color-shift-morning:   oklch(80%   0.16  55);
+  --color-shift-morning-bg:oklch(20%   0.06  60);
+  --color-shift-afternoon: oklch(68%   0.18  255);
+  --color-shift-afternoon-bg:oklch(18% 0.06  255);
+  --color-shift-night:     oklch(72%   0.16  300);
+  --color-shift-night-bg:  oklch(18%   0.05  300);
+  --color-shift-off:       oklch(60%   0.006 248);
+  --color-shift-off-bg:    oklch(20%   0.006 248);
+
+  /* Sidebar */
+  --color-sidebar-bg:      oklch(15%   0.010 248);   /* #13161e */
+  --color-sidebar-border:  oklch(22%   0.008 248);
+
+  /* Header */
+  --color-header-bg:       oklch(16%   0.010 248);
+  --color-header-border:   oklch(22%   0.008 248);
+
+  /* Shadows (mais opacas no dark) */
+  --shadow-sm:   0 1px 2px  oklch(5% 0 0 / 30%);
+  --shadow-md:   0 4px 12px oklch(5% 0 0 / 40%);
+  --shadow-lg:   0 10px 40px oklch(5% 0 0 / 50%);
+  --shadow-dropdown: 0 8px 24px oklch(5% 0 0 / 50%),
+                     0 2px 8px  oklch(5% 0 0 / 40%);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BASE STYLES
+   ══════════════════════════════════════════════════════════════ */
+html {
+  font-family: var(--font-sans);
+  font-feature-settings: "cv01", "cv02", "cv03", "cv04", "ss01";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+}
+
 body {
-  background-color: var(--color-surface-container);
-  color: var(--color-on-surface);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color 200ms var(--ease-out-expo),
+              color 200ms var(--ease-out-expo);
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
 
+/* ── Seleção de texto ─── */
+::selection {
+  background-color: var(--color-accent-dim);
+  color: var(--color-text);
+}
+
+/* ── Focus Ring Global (acessibilidade) ─── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* ── Scrollbar customizada ─── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-border);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-text-faint);
+}
+
+/* ── Helper: dados numéricos com tabular-nums ─── */
+.data-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  font-family: var(--font-mono);
+}
+
+/* ── Skeleton Loader ─── */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-dim) 25%,
+    var(--color-surface-raised) 50%,
+    var(--color-surface-dim) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TIPTAP / RICH TEXT EDITOR
+   ══════════════════════════════════════════════════════════════ */
 .mention {
-  background: #dbeafe;
-  color: #1d4ed8;
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: var(--color-accent-dim);
+  color: var(--color-accent-text);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
   font-weight: 600;
+  font-size: 0.875em;
 }
 
 .ProseMirror table {
@@ -42,19 +262,42 @@ body {
 
 .ProseMirror td,
 .ProseMirror th {
-  border: 1px solid #d1d5db;
-  padding: 8px;
+  border: 1px solid var(--color-border);
+  padding: 8px 12px;
 }
 
 .ProseMirror th {
-  background: #f3f4f6;
+  background: var(--color-surface-dim);
   font-weight: 700;
+  font-size: 0.8125em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: #9ca3af;
+  color: var(--color-text-faint);
   pointer-events: none;
   float: left;
   height: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   ANIMAÇÕES REDUZIDAS (prefers-reduced-motion)
+   ══════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .skeleton {
+    animation: none;
+    background: var(--color-surface-dim);
+  }
 }

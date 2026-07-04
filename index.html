@@ -1,10 +1,48 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>noc-pro</title>
+    <meta name="description" content="NOC-PRO — Hub operacional para gestão de turnos e escalas do Network Operations Center." />
+    <meta name="theme-color" content="#161b22" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f7fa" media="(prefers-color-scheme: light)" />
+
+    <title>NOC-PRO — Hub Operacional</title>
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Geist Font (Google Fonts) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!--
+      Anti-flicker theme script: roda SÍNCRONAMENTE antes do primeiro paint.
+      Lê o tema salvo e aplica a classe .dark no <html> imediatamente,
+      evitando o flash de tela branca ao recarregar em dark mode.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('noc-pro:theme');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          // Default: dark (ambiente NOC opera 24/7, dark é o padrão operacional)
+          var isDark = stored === 'dark' || (!stored && prefersDark) || (!stored && !prefersDark === false);
+          if (stored === 'light') {
+            document.documentElement.classList.remove('dark');
+          } else {
+            // dark ou system sem preferência → dark
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {
+          // Se localStorage falhar, aplica dark como fallback
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

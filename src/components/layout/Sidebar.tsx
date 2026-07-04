@@ -6,72 +6,134 @@ import {
   Settings,
   HelpCircle,
   Users,
-  HomeIcon,
+  Home,
+  Radio,
 } from "lucide-react";
-import DashboardHome from "../../features/home/page/HomePage";
+
+interface MenuItem {
+  icon: React.ElementType;
+  label: string;
+  path: string;
+}
 
 export const Sidebar = () => {
   const location = useLocation();
 
-  // Mock da permissão
-  const userRole = "Admin";
-  const isAdminOrManager = userRole === "Admin" || userRole === "Manager";
-
-  // 👇 Adicionada a rota do mural de comunicação e passagens
-  const menuItems = [
-    { icon: LayoutDashboard, label: "PAINEL", path: "/dashboard" },
-    { icon: ArrowLeftRight, label: "MURAL E PLANTÃO", path: "/comunicacao" },
-    { icon: HomeIcon, label: "HOME", path: "/home" },
-    ...(isAdminOrManager
-      ? [{ icon: Users, label: "USUÁRIOS", path: "/users" }]
-      : []),
+  // TODO: Conectar ao AuthStore quando o backend fornecer o campo 'role' no perfil
+  const menuItems: MenuItem[] = [
+    { icon: Home,            label: "Início",           path: "/home" },
+    { icon: LayoutDashboard, label: "Painel de Escalas", path: "/dashboard" },
+    { icon: ArrowLeftRight,  label: "Mural e Plantão",  path: "/comunicacao" },
+    { icon: Users,           label: "Usuários",          path: "/users" },
   ];
 
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + "/");
+
   return (
-    <aside className="w-[260px] h-screen bg-[#fbf9fa] border-r border-[#efedef] flex flex-col shrink-0">
-      <div className="p-6">
-        <h1 className="text-[18px] font-bold text-[#041627] leading-tight">
-          Operações
-          <br />
-          Industriais
-        </h1>
-        <p className="text-[12px] font-semibold text-[#74777d] mt-2 uppercase tracking-wider">
-          Gestão de Turnos
-        </p>
+    <aside
+      className="w-[240px] h-screen flex flex-col shrink-0"
+      style={{
+        backgroundColor: "var(--color-sidebar-bg)",
+        borderRight: "1px solid var(--color-sidebar-border)",
+      }}
+    >
+      {/* ── Logo / Brand ─────────────────────────────────────────── */}
+      <div className="px-5 pt-6 pb-5" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{ backgroundColor: "var(--color-accent)" }}
+          >
+            <Radio size={16} color="white" strokeWidth={2} />
+          </div>
+          <div>
+            <p className="text-[15px] font-bold leading-none" style={{ color: "var(--color-text)" }}>
+              NOC-PRO
+            </p>
+            <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--color-text-faint)" }}>
+              Gestão de Turnos
+            </p>
+          </div>
+        </div>
       </div>
 
-      <nav className="flex-1 mt-6">
-        {menuItems.map((item, index) => {
-          const isActive = location.pathname === item.path;
+      {/* ── Navegação principal ───────────────────────────────────── */}
+      <nav className="flex-1 px-3 pt-4 flex flex-col gap-0.5">
+        {menuItems.map((item) => {
+          const active = isActive(item.path);
           return (
             <Link
-              key={index}
+              key={item.path}
               to={item.path}
-              className={`flex items-center gap-3 px-6 py-4 text-[14px] font-medium transition-colors border-l-4 
-              ${isActive ? "border-[#0058be] text-[#0058be] bg-[#0058be]/5" : "border-transparent text-[#44474c] hover:bg-[#efedef] hover:text-[#1b1c1d]"}`}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-[6px] text-[13.5px] font-medium transition-all duration-150"
+              style={{
+                color: active ? "var(--color-accent-text)" : "var(--color-text-muted)",
+                backgroundColor: active ? "var(--color-accent-dim)" : "transparent",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor =
+                    "var(--color-surface-raised)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+                }
+              }}
             >
-              <item.icon size={20} />
-              {item.label}
+              <item.icon
+                size={17}
+                strokeWidth={active ? 2.5 : 1.8}
+                style={{ color: active ? "var(--color-accent)" : "inherit" }}
+              />
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-4 border-t border-[#efedef] flex flex-col gap-2">
-        <Link
-          to="/configuracoes"
-          className={`flex items-center gap-3 px-4 py-3 text-[14px] font-medium rounded-[4px] transition-colors
-          ${location.pathname === "/configuracoes" ? "bg-[#0058be]/10 text-[#0058be] font-bold" : "text-[#44474c] hover:bg-[#efedef] hover:text-[#1b1c1d]"}`}
-        >
-          <Settings size={20} /> CONFIGURAÇÕES
-        </Link>
-        <Link
-          to="/suporte"
-          className={`flex items-center gap-3 px-4 py-3 text-[14px] font-medium rounded-[4px] transition-colors
-          ${location.pathname === "/suporte" ? "bg-[#0058be]/10 text-[#0058be] font-bold" : "text-[#44474c] hover:bg-[#efedef] hover:text-[#1b1c1d]"}`}
-        >
-          <HelpCircle size={20} /> SUPORTE
-        </Link>
+      {/* ── Navegação secundária ──────────────────────────────────── */}
+      <div
+        className="px-3 pb-5 pt-3 flex flex-col gap-0.5"
+        style={{ borderTop: "1px solid var(--color-border-subtle)" }}
+      >
+        {[
+          { icon: Settings,    label: "Configurações", path: "/configuracoes" },
+          { icon: HelpCircle,  label: "Suporte",       path: "/suporte" },
+        ].map((item) => {
+          const active = isActive(item.path);
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-[6px] text-[13.5px] font-medium transition-all duration-150"
+              style={{
+                color: active ? "var(--color-accent-text)" : "var(--color-text-faint)",
+                backgroundColor: active ? "var(--color-accent-dim)" : "transparent",
+              }}
+              onMouseEnter={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor =
+                    "var(--color-surface-raised)";
+                  (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                  (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)";
+                }
+              }}
+            >
+              <item.icon size={16} strokeWidth={1.8} />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
       </div>
     </aside>
   );

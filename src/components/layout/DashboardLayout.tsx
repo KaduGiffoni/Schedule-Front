@@ -1,43 +1,48 @@
-import React, { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
-import { Sidebar } from './Sidebar';
-import { Header } from './Header';
-
-// 👇 Importamos o cofre e o serviço da API
-import { useAuthStore } from '../../features/auth/store/authStore';
-import { userService } from '../../features/auth/api/userService';
+import React, { useEffect } from "react";
+import { Outlet } from "react-router-dom";
+import { Sidebar } from "./Sidebar";
+import { Header } from "./Header";
+import { useAuthStore } from "../../features/auth/store/authStore";
+import { userService } from "../../features/auth/api/userService";
+import { useTheme } from "../../lib/theme";
 
 export const DashboardLayout = () => {
-  // Puxamos o email guardado e a função para guardar o perfil
   const email = useAuthStore((state) => state.email);
   const setUserProfile = useAuthStore((state) => state.setUserProfile);
 
-  // O useEffect roda automaticamente quando este Layout aparece no ecrã
+  // Inicializa o tema (sincroniza com DOM)
+  useTheme();
+
+  // Carrega o perfil do usuário uma única vez
   useEffect(() => {
+    if (!email) return;
+
     const carregarPerfil = async () => {
-      if (email) {
-        try {
-          // Vamos à API do C# procurar os dados do utilizador!
-          const perfilReal = await userService.getUserProfile(email);
-          // Guardamos o resultado no nosso cofre
-          setUserProfile(perfilReal);
-        } catch (error) {
-          console.error("Falha ao carregar os dados do utilizador", error);
-        }
+      try {
+        const perfilReal = await userService.getUserProfile(email);
+        setUserProfile(perfilReal);
+      } catch (error) {
+        console.error("Falha ao carregar dados do utilizador", error);
       }
     };
 
     carregarPerfil();
-  }, [email, setUserProfile]); // Se o email mudar, ele roda de novo
+  }, [email, setUserProfile]);
 
   return (
-    <div className="flex h-screen bg-[#ffffff] font-sans text-[#1b1c1d] overflow-hidden">
+    <div
+      className="flex h-screen overflow-hidden"
+      style={{ backgroundColor: "var(--color-bg)", color: "var(--color-text)" }}
+    >
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Header />
-        <div className="flex-1 overflow-hidden bg-white">
+        <main
+          className="flex-1 overflow-hidden"
+          style={{ backgroundColor: "var(--color-bg)" }}
+        >
           <Outlet />
-        </div>
+        </main>
       </div>
     </div>
   );

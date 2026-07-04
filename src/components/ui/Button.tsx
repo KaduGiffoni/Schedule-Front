@@ -1,31 +1,97 @@
-import React from 'react';
+import React from "react";
+import { Loader2 } from "lucide-react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'outline';
+  variant?: "primary" | "outline" | "ghost" | "danger";
+  size?: "sm" | "md" | "lg";
   isLoading?: boolean;
 }
 
-export const Button: React.FC<ButtonProps> = ({ 
-  children, variant = 'primary', isLoading, className = '', disabled, ...props 
+export const Button: React.FC<ButtonProps> = ({
+  children,
+  variant = "primary",
+  size = "md",
+  isLoading,
+  className = "",
+  disabled,
+  style,
+  ...props
 }) => {
-  const baseStyle = "w-full h-[40px] rounded-[4px] text-[14px] font-medium transition-all flex items-center justify-center gap-2";
-  const variants = {
-    primary: "bg-[#0058be] text-white hover:bg-[#2170e4] active:scale-[0.99] disabled:bg-[#0058be]/50",
-    outline: "bg-transparent text-[#1b1c1d] border border-[#c4c6cd] hover:bg-[#f5f3f4] disabled:opacity-50",
+  const isDisabled = isLoading || disabled;
+
+  const sizeStyles: Record<string, React.CSSProperties> = {
+    sm: { height: "32px", padding: "0 12px", fontSize: "12px" },
+    md: { height: "40px", padding: "0 16px", fontSize: "14px" },
+    lg: { height: "48px", padding: "0 20px", fontSize: "15px" },
   };
 
+  const variantStyles: Record<string, React.CSSProperties> = {
+    primary: {
+      backgroundColor: "var(--color-accent)",
+      color: "white",
+      border: "none",
+    },
+    outline: {
+      backgroundColor: "transparent",
+      color: "var(--color-text-muted)",
+      border: "1px solid var(--color-border)",
+    },
+    ghost: {
+      backgroundColor: "transparent",
+      color: "var(--color-text-muted)",
+      border: "none",
+    },
+    danger: {
+      backgroundColor: "var(--color-error-subtle)",
+      color: "var(--color-error)",
+      border: "1px solid var(--color-error)",
+    },
+  };
+
+  const hoverStyles: Record<string, React.CSSProperties> = {
+    primary: { backgroundColor: "var(--color-accent-hover)" },
+    outline: { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text)" },
+    ghost: { backgroundColor: "var(--color-surface-raised)", color: "var(--color-text)" },
+    danger: { backgroundColor: "var(--color-error)", color: "white" },
+  };
+
+  const [isHovered, setIsHovered] = React.useState(false);
+  const [isPressed, setIsPressed] = React.useState(false);
+
   return (
-    <button 
-      className={`${baseStyle} ${variants[variant]} ${className}`} 
-      disabled={isLoading || disabled}
+    <button
+      className={`w-full flex items-center justify-center gap-2 font-semibold rounded-[6px] select-none ${className}`}
+      disabled={isDisabled}
+      style={{
+        ...sizeStyles[size],
+        ...variantStyles[variant],
+        ...(isHovered && !isDisabled ? hoverStyles[variant] : {}),
+        transform: isPressed && !isDisabled ? "scale(0.97)" : "scale(1)",
+        opacity: isDisabled ? 0.5 : 1,
+        cursor: isDisabled ? "not-allowed" : "pointer",
+        // Transições específicas — nunca `transition: all`
+        transition:
+          "background-color 150ms ease-out, color 150ms ease-out, transform 100ms ease-out, opacity 150ms ease-out",
+        ...style,
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => { setIsHovered(false); setIsPressed(false); }}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
       {...props}
     >
       {isLoading ? (
-        <span className="flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          Processing...
-        </span>
-      ) : children}
+        <>
+          <Loader2
+            size={16}
+            className="animate-spin"
+            style={{ color: variant === "primary" ? "white" : "var(--color-accent)" }}
+          />
+          <span>Aguarde...</span>
+        </>
+      ) : (
+        children
+      )}
     </button>
   );
 };

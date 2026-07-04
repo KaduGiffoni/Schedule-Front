@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Search,
   Bell,
@@ -7,68 +7,84 @@ import {
   Settings,
   Megaphone,
   ArrowRightLeft,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { usersService, type User } from "../../features/users/api/usersService";
-import { noticesService } from "../../features/notices/api/noticesService"; // 👇 Importamos o serviço de avisos
+import { useAuthStore } from "../../features/auth/store/authStore";
+import { useTheme } from "../../lib/theme";
+import { noticesService } from "../../features/notices/api/noticesService";
 import type { Notice } from "../../features/notices/types";
 
+// ── Subcomponente: Dropdown com animação CSS ──────────────────────────────────
+interface DropdownProps {
+  isOpen: boolean;
+  children: React.ReactNode;
+  className?: string;
+}
+
+const Dropdown = ({ isOpen, children, className = "" }: DropdownProps) => (
+  <div
+    className={`absolute right-0 top-[calc(100%+8px)] z-[var(--z-dropdown)] ${className}`}
+    style={{
+      opacity: isOpen ? 1 : 0,
+      transform: isOpen ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.97)",
+      pointerEvents: isOpen ? "auto" : "none",
+      transition: isOpen
+        ? "opacity 150ms var(--ease-out-expo), transform 150ms var(--ease-out-expo)"
+        : "opacity 100ms ease-in, transform 100ms ease-in",
+      transformOrigin: "top right",
+    }}
+  >
+    {children}
+  </div>
+);
+
+// ── Header principal ──────────────────────────────────────────────────────────
 export const Header = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [isNotifOpen, setIsNotifOpen] = useState(false); // 👇 Estado do menu do sininho
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [notices, setNotices] = useState<Notice[]>([]);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null); // 👇 Ref para o sininho
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const [userData, setUserData] = useState<User | null>(null);
-  const [notices, setNotices] = useState<Notice[]>([]); // 👇 Estado para os avisos ativos
+  const { theme, toggleTheme, isDark } = useTheme();
 
-  const loggedInEmail = localStorage.getItem("userEmail") || "";
+  // Dados do usuário via AuthStore (DashboardLayout já faz o fetch)
+  const userProfile = useAuthStore((state) => state.userProfile);
+  const email = useAuthStore((state) => state.email);
 
+  const displayName = userProfile?.completeName ?? email ?? "Operador";
+  const displayRegistration = userProfile?.registration ?? "";
+  const initialLetter = (userProfile?.completeName ?? email ?? "O")
+    .charAt(0)
+    .toUpperCase();
+
+  // Fetch de notificações (independente dos dados de usuário)
   useEffect(() => {
-    const fetchHeaderData = async () => {
-      if (!loggedInEmail) return;
+    const fetchNotices = async () => {
       try {
-        // Busca os dados do usuário e do mural em paralelo
-        const [user, board] = await Promise.all([
-          usersService.getUserByEmail(loggedInEmail),
-          noticesService.getMyBoard().catch(() => null), // Se falhar, retorna null temporariamente
-        ]);
-
-        setUserData(user);
-
-        // 👇 Extração segura: garante que pegamos o array de dentro de .data
-        if (board && board.data) {
-          setNotices(board.data);
-        } else {
-          setNotices([]); // Fallback seguro para o array não ser undefined
-        }
-      } catch (error) {
-        console.error("Erro ao carregar dados do Header", error);
-        setNotices([]); // Garante que nunca fica undefined em caso de pane geral
+        const board = await noticesService.getMyBoard().catch(() => null);
+        setNotices(board?.data ?? []);
+      } catch {
+        setNotices([]);
       }
     };
 
-    fetchHeaderData();
-
-    const interval = setInterval(fetchHeaderData, 120000);
+    fetchNotices();
+    const interval = setInterval(fetchNotices, 120_000);
     return () => clearInterval(interval);
-  }, [loggedInEmail]);
+  }, []);
 
-  // Fecha os menus ao clicar fora
+  // Fecha menus ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
-      if (
-        notifRef.current &&
-        !notifRef.current.contains(event.target as Node)
-      ) {
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
         setIsNotifOpen(false);
       }
     };
@@ -76,67 +92,167 @@ export const Header = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("token");
     localStorage.removeItem("userEmail");
+    useAuthStore.getState().logout?.();
     setIsDropdownOpen(false);
     navigate("/");
+  }, [navigate]);
+
+  const iconBtnStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "36px",
+    height: "36px",
+    borderRadius: "8px",
+    border: "none",
+    background: "transparent",
+    color: "var(--color-text-muted)",
+    cursor: "pointer",
+    transition: "background-color 120ms ease-out, color 120ms ease-out",
   };
 
-  const displayName = userData?.completeName
-    ? `${userData.completeName} ${userData.surname || ""}`.trim()
-    : "Carregando...";
-  const displayRegistration = userData?.registration || "N/A";
-  const initialLetter = userData?.completeName
-    ? userData.completeName.charAt(0).toUpperCase()
-    : "U";
-
   return (
-    <header className="h-[72px] bg-white border-b border-[#e4e2e3] flex items-center justify-between px-8 shrink-0 z-20 relative">
-      <div className="flex-1 max-w-[480px]">
+    <header
+      className="h-[60px] flex items-center justify-between px-5 shrink-0 relative z-[var(--z-sticky)]"
+      style={{
+        backgroundColor: "var(--color-header-bg)",
+        borderBottom: "1px solid var(--color-header-border)",
+      }}
+    >
+      {/* ── Campo de busca ─────────────────────────────────────────── */}
+      <div className="flex-1 max-w-[400px]">
         <div className="relative">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#74777d]"
-            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            size={15}
+            style={{ color: "var(--color-text-faint)" }}
           />
           <input
-            type="text"
+            type="search"
             placeholder="Buscar turnos ou pessoal..."
-            className="w-full h-10 pl-10 pr-4 bg-[#fbf9fa] border border-[#e4e2e3] rounded-[6px] text-[14px] focus:outline-none focus:border-[#0058be] focus:ring-1 focus:ring-[#0058be] transition-all"
+            className="w-full h-9 pl-9 pr-4 text-[13px] rounded-[6px]"
+            style={{
+              backgroundColor: "var(--color-surface-dim)",
+              border: "1px solid var(--color-border)",
+              color: "var(--color-text)",
+              outline: "none",
+              transition: "border-color 150ms ease-out, box-shadow 150ms ease-out",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "var(--color-accent)";
+              e.target.style.boxShadow = "0 0 0 3px var(--color-accent-dim)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "var(--color-border)";
+              e.target.style.boxShadow = "none";
+            }}
           />
         </div>
       </div>
 
-      <div className="flex items-center gap-6">
-        {/* 👇 NOVO: Componente do Sininho com Dropdown Real */}
+      {/* ── Ações direita ───────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5">
+
+        {/* Toggle de tema */}
+        <button
+          onClick={toggleTheme}
+          style={iconBtnStyle}
+          title={isDark ? "Alternar para modo claro" : "Alternar para modo escuro"}
+          aria-label={isDark ? "Ativar modo claro" : "Ativar modo escuro"}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+            (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+            (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+          }}
+        >
+          {isDark ? <Sun size={17} strokeWidth={1.8} /> : <Moon size={17} strokeWidth={1.8} />}
+        </button>
+
+        {/* ── Sino de notificações ──────────────────────────────────── */}
         <div className="relative" ref={notifRef}>
           <button
-            onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className={`relative p-2 rounded-full transition-colors ${isNotifOpen ? "bg-zinc-100 text-[#1b1c1d]" : "text-[#44474c] hover:text-[#1b1c1d]"}`}
+            id="header-notifications-btn"
+            onClick={() => setIsNotifOpen((prev) => !prev)}
+            aria-expanded={isNotifOpen}
+            aria-haspopup="true"
+            style={{
+              ...iconBtnStyle,
+              backgroundColor: isNotifOpen ? "var(--color-surface-raised)" : "transparent",
+              color: isNotifOpen ? "var(--color-text)" : "var(--color-text-muted)",
+            }}
+            onMouseEnter={(e) => {
+              if (!isNotifOpen) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+                (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isNotifOpen) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+              }
+            }}
           >
-            <Bell size={20} />
+            <Bell size={17} strokeWidth={1.8} />
+            {/* Badge estático — sem pulse (Emil: não animar elementos de alta frequência) */}
             {notices.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#ba1a1a] text-white text-[9px] font-black rounded-full border border-white flex items-center justify-center animate-pulse">
-                {notices.length}
-              </span>
+              <span
+                className="absolute top-1.5 right-1.5 w-[7px] h-[7px] rounded-full border-2"
+                style={{
+                  backgroundColor: "var(--color-error)",
+                  borderColor: "var(--color-header-bg)",
+                }}
+              />
             )}
           </button>
 
-          {isNotifOpen && (
-            <div className="absolute right-0 top-[calc(100%+8px)] w-[320px] bg-white border border-[#e4e2e3] rounded-[8px] shadow-[0_10px_40px_rgba(0,0,0,0.08)] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-              <div className="px-4 py-3 bg-[#f8fafc] border-b border-[#e4e2e3] flex justify-between items-center">
-                <span className="text-[12px] font-bold text-[#041627] uppercase tracking-wider">
+          {/* Dropdown de notificações */}
+          <Dropdown isOpen={isNotifOpen} className="w-[300px]">
+            <div
+              className="rounded-[10px] overflow-hidden"
+              style={{
+                backgroundColor: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+                boxShadow: "var(--shadow-dropdown)",
+              }}
+            >
+              {/* Header do dropdown */}
+              <div
+                className="flex items-center justify-between px-4 py-3"
+                style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+              >
+                <span
+                  className="text-[12px] font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
                   Alertas Operacionais
                 </span>
-                <span className="text-[10px] bg-zinc-200 text-zinc-700 font-bold px-1.5 py-0.5 rounded">
-                  {notices.length} pendentes
-                </span>
+                {notices.length > 0 && (
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-[4px]"
+                    style={{
+                      backgroundColor: "var(--color-accent-dim)",
+                      color: "var(--color-accent-text)",
+                    }}
+                  >
+                    {notices.length}
+                  </span>
+                )}
               </div>
 
-              <div className="max-h-[280px] overflow-y-auto divide-y divide-[#efedef] custom-scrollbar">
+              {/* Lista de notificações */}
+              <div className="max-h-[260px] overflow-y-auto divide-y" style={{ "--tw-divide-color": "var(--color-border-subtle)" } as React.CSSProperties}>
                 {notices.length === 0 ? (
-                  <div className="p-6 text-center text-[13px] text-[#74777d] italic">
-                    Nenhuma pendência pendendo atenção no momento.
+                  <div className="p-5 text-center">
+                    <p className="text-[13px]" style={{ color: "var(--color-text-faint)" }}>
+                      Sem pendências no momento.
+                    </p>
                   </div>
                 ) : (
                   notices.map((n) => (
@@ -144,24 +260,37 @@ export const Header = () => {
                       key={n.id}
                       to="/comunicacao"
                       onClick={() => setIsNotifOpen(false)}
-                      className="p-4 flex gap-3 hover:bg-[#fbf9fa] transition-colors text-left block"
+                      className="flex gap-3 p-3.5 transition-colors duration-100"
+                      style={{ display: "flex" }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                      }}
                     >
                       <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 
-                        ${n.type === "Turno" ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600"}`}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+                        style={{
+                          backgroundColor: n.type === "Turno"
+                            ? "var(--color-shift-night-bg)"
+                            : "var(--color-accent-subtle)",
+                          color: n.type === "Turno"
+                            ? "var(--color-shift-night)"
+                            : "var(--color-accent)",
+                        }}
                       >
-                        {n.type === "Turno" ? (
-                          <ArrowRightLeft size={14} />
-                        ) : (
-                          <Megaphone size={14} />
-                        )}
+                        {n.type === "Turno"
+                          ? <ArrowRightLeft size={13} strokeWidth={2} />
+                          : <Megaphone size={13} strokeWidth={2} />
+                        }
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-bold text-[#1b1c1d] truncate">
+                        <p className="text-[13px] font-semibold truncate" style={{ color: "var(--color-text)" }}>
                           {n.title}
                         </p>
-                        <p className="text-[11px] text-[#74777d] mt-0.5 truncate">
-                          Por @{n.createdByUserName}
+                        <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--color-text-faint)" }}>
+                          @{n.createdByUserName}
                         </p>
                       </div>
                     </Link>
@@ -169,71 +298,143 @@ export const Header = () => {
                 )}
               </div>
 
+              {/* Footer do dropdown */}
               <Link
                 to="/comunicacao"
                 onClick={() => setIsNotifOpen(false)}
-                className="block text-center py-2.5 bg-[#f5f7fb] border-t border-[#e4e2e3] text-[12px] font-bold text-[#0058be] hover:bg-[#e0e7ff] transition-colors"
+                className="block text-center py-2.5 text-[12px] font-semibold transition-colors"
+                style={{
+                  borderTop: "1px solid var(--color-border-subtle)",
+                  color: "var(--color-accent-text)",
+                  backgroundColor: "var(--color-surface-dim)",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-subtle)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-dim)";
+                }}
               >
-                Ver tudo no painel
+                Ver painel completo
               </Link>
             </div>
-          )}
+          </Dropdown>
         </div>
 
-        {/* Área do Perfil */}
-        <div className="relative" ref={dropdownRef}>
+        {/* ── Perfil do usuário ─────────────────────────────────────── */}
+        <div
+          className="relative ml-1"
+          style={{ paddingLeft: "12px", borderLeft: "1px solid var(--color-border)" }}
+          ref={dropdownRef}
+        >
           <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-3 pl-6 border-l border-[#e4e2e3] hover:bg-zinc-50 p-1.5 rounded-lg transition-colors cursor-pointer text-left"
+            id="header-profile-btn"
+            onClick={() => setIsDropdownOpen((prev) => !prev)}
+            aria-expanded={isDropdownOpen}
+            aria-haspopup="true"
+            className="flex items-center gap-2.5 px-2 py-1 rounded-[8px] transition-colors duration-120"
+            style={{
+              backgroundColor: isDropdownOpen ? "var(--color-surface-raised)" : "transparent",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              if (!isDropdownOpen) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isDropdownOpen) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+              }
+            }}
           >
-            <div>
-              <p className="text-[14px] font-bold text-[#1b1c1d] leading-none">
+            <div className="text-right hidden sm:block">
+              <p className="text-[13px] font-semibold leading-none" style={{ color: "var(--color-text)" }}>
                 {displayName}
               </p>
-              <p className="text-[12px] font-medium text-[#74777d] mt-1 uppercase tracking-wide">
-                {displayRegistration}
-              </p>
+              {displayRegistration && (
+                <p className="text-[10.5px] mt-0.5 font-medium" style={{ color: "var(--color-text-faint)" }}>
+                  {displayRegistration}
+                </p>
+              )}
             </div>
-            <div className="w-9 h-9 rounded-full bg-[#0058be] text-white flex items-center justify-center font-bold text-[14px] shadow-sm">
+            {/* Avatar */}
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold shrink-0"
+              style={{
+                backgroundColor: "var(--color-accent)",
+                color: "white",
+              }}
+            >
               {initialLetter}
             </div>
           </button>
 
-          {isDropdownOpen && (
-            <div className="absolute right-0 top-[calc(100%+8px)] w-[220px] bg-white border border-[#e4e2e3] rounded-[8px] shadow-[0_10px_40px_rgba(0,0,0,0.08)] py-1.5 animate-in fade-in slide-in-from-top-2 z-50">
-              <div className="px-4 py-3 border-b border-[#e4e2e3] mb-1">
-                <p className="text-[13px] font-bold text-[#1b1c1d] truncate">
-                  {loggedInEmail || "Usuário não identificado"}
+          {/* Dropdown de perfil */}
+          <Dropdown isOpen={isDropdownOpen} className="w-[200px]">
+            <div
+              className="rounded-[10px] overflow-hidden py-1"
+              style={{
+                backgroundColor: "var(--color-surface)",
+                border: "1px solid var(--color-border)",
+                boxShadow: "var(--shadow-dropdown)",
+              }}
+            >
+              {/* Info do usuário */}
+              <div className="px-3 py-2.5 mb-1" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
+                <p className="text-[12px] font-semibold truncate" style={{ color: "var(--color-text)" }}>
+                  {email ?? ""}
                 </p>
-                <p className="text-[11px] text-[#74777d]">Acesso Autorizado</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--color-text-faint)" }}>
+                  Acesso autorizado
+                </p>
               </div>
 
-              <Link
-                to="/perfil"
-                onClick={() => setIsDropdownOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 text-[13px] font-semibold text-[#44474c] hover:bg-[#fbf9fa] hover:text-[#0058be] transition-colors"
-              >
-                <UserIcon size={16} /> Meu Perfil
-              </Link>
+              {/* Links do menu */}
+              {[
+                { to: "/perfil",        icon: UserIcon,  label: "Meu Perfil" },
+                { to: "/configuracoes", icon: Settings,  label: "Configurações" },
+              ].map(({ to, icon: Icon, label }) => (
+                <Link
+                  key={to}
+                  to={to}
+                  onClick={() => setIsDropdownOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors duration-100"
+                  style={{ color: "var(--color-text-muted)" }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+                    (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                    (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+                  }}
+                >
+                  <Icon size={15} strokeWidth={1.8} />
+                  {label}
+                </Link>
+              ))}
 
-              <Link
-                to="/configuracoes"
-                onClick={() => setIsDropdownOpen(false)}
-                className="flex items-center gap-2.5 px-4 py-2 text-[13px] font-semibold text-[#44474c] hover:bg-[#fbf9fa] hover:text-[#0058be] transition-colors"
-              >
-                <Settings size={16} /> Configurações
-              </Link>
+              {/* Separador */}
+              <div className="my-1" style={{ height: "1px", backgroundColor: "var(--color-border-subtle)" }} />
 
-              <div className="h-px bg-[#e4e2e3] my-1.5"></div>
-
+              {/* Logout */}
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-semibold text-[#ba1a1a] hover:bg-[#fff0f0] transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[13px] font-medium transition-colors duration-100"
+                style={{ color: "var(--color-error)" }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-error-subtle)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                }}
               >
-                <LogOut size={16} /> Encerrar Sessão
+                <LogOut size={15} strokeWidth={1.8} />
+                Encerrar sessão
               </button>
             </div>
-          )}
+          </Dropdown>
         </div>
       </div>
     </header>
