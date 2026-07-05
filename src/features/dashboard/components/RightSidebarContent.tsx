@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Tent, PartyPopper, CalendarDays, ChevronLeft } from "lucide-react";
 import { scheduleService } from "../api/scheduleService";
 import { usersService, type User } from "../../users/api/usersService";

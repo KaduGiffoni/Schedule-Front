@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { scheduleService } from "../api/scheduleService";
 import { holidayService, type Holiday } from "../../settings/api/holidayService";
 import type { ScheduleDay } from "../types";

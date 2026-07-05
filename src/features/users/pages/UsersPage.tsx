@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { UserPlus, Filter, X, Save, Pencil, Loader2 } from "lucide-react";
+import { UserPlus, Filter, Save, Pencil, Loader2 } from "lucide-react";
 import { usersService, type User } from "../api/usersService";
 import { InputField } from "../../../components/ui/InputField";
 import { Button } from "../../../components/ui/Button";
