@@ -2,15 +2,16 @@ import React, { useEffect, useState, useCallback } from "react";
 import { scheduleService } from "../api/scheduleService";
 import { holidayService, type Holiday } from "../../settings/api/holidayService";
 import type { ScheduleDay } from "../types";
-import { X, PartyPopper } from "lucide-react";
+import { X, PartyPopper, Palmtree, ArrowLeftRight } from "lucide-react";
 import {
-  TEAM_MAP,
   SHIFT_ORDER,
   getShiftStyle,
+  getTeamName,
   normalizeShiftName,
   parseShiftDay,
   parseDateParts,
 } from "../../../lib/schedule-utils";
+import { useLettersStore } from "../../letters/store/lettersStore";
 
 // ── Skeleton Loader do Calendário ─────────────────────────────────────────────
 const CalendarSkeleton = () => (
@@ -39,6 +40,10 @@ export const CalendarGrid = ({
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
+
+  // Letras/equipes dinâmicas via /api/Letters
+  const { letters, fetchLetters } = useLettersStore();
+  useEffect(() => { fetchLetters(); }, [fetchLetters]);
 
   // Bloqueia scroll do body enquanto modal está aberto
   useEffect(() => {
@@ -200,17 +205,29 @@ export const CalendarGrid = ({
                       </span>
                     )}
                   </div>
-                  {isToday && (
-                    <div
-                      className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-[3px]"
-                      style={{
-                        backgroundColor: "var(--color-accent-dim)",
-                        color: "var(--color-accent-text)",
-                      }}
-                    >
-                      Hoje
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {/* Badge de ausências */}
+                    {dayShifts.some((s) => s.hasAbsence) && (
+                      <span
+                        title={`${dayShifts.flatMap((s) => s.absences).length} ausência(s) neste dia`}
+                        className="w-4 h-4 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: "var(--color-warning-subtle)", color: "var(--color-warning)" }}
+                      >
+                        <Palmtree size={9} strokeWidth={2.5} />
+                      </span>
+                    )}
+                    {isToday && (
+                      <div
+                        className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-[3px]"
+                        style={{
+                          backgroundColor: "var(--color-accent-dim)",
+                          color: "var(--color-accent-text)",
+                        }}
+                      >
+                        Hoje
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Turnos do dia */}
@@ -220,7 +237,7 @@ export const CalendarGrid = ({
                 >
                   {dayShifts.map((shift) => {
                     const style = getShiftStyle(shift.shiftName);
-                    const teamName = TEAM_MAP[shift.letterId] ?? "?";
+                    const teamName = getTeamName(shift.letterId, letters);
                     const isFaded = selectedTeam !== null && shift.letterId !== selectedTeam;
 
                     return (
@@ -237,12 +254,23 @@ export const CalendarGrid = ({
                           <span className={`text-[9px] font-semibold px-1 py-[1px] rounded-[3px] whitespace-nowrap ${style.badge}`}>
                             {style.label}
                           </span>
-                          <span
-                            className="text-[10px] font-bold whitespace-nowrap"
-                            style={{ color: isFaded ? "var(--color-text-faint)" : "var(--color-text-muted)" }}
-                          >
-                            Eq. {teamName}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {shift.isSwapped && (
+                              <span
+                                title={shift.swappedWithUserName ? `Trocado com ${shift.swappedWithUserName}` : "Turno trocado"}
+                                className="w-3 h-3 rounded-full flex items-center justify-center"
+                                style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)" }}
+                              >
+                                <ArrowLeftRight size={7} strokeWidth={2.5} />
+                              </span>
+                            )}
+                            <span
+                              className="text-[10px] font-bold whitespace-nowrap"
+                              style={{ color: isFaded ? "var(--color-text-faint)" : "var(--color-text-muted)" }}
+                            >
+                              Eq. {teamName}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
@@ -376,7 +404,7 @@ export const CalendarGrid = ({
               <div className="flex flex-col gap-3">
                 {modalShifts.map((shift) => {
                   const style = getShiftStyle(shift.shiftName);
-                  const teamName = TEAM_MAP[shift.letterId] ?? "?";
+                  const teamName = getTeamName(shift.letterId, letters);
                   const isFaded = selectedTeam !== null && shift.letterId !== selectedTeam;
 
                   return (
@@ -400,6 +428,21 @@ export const CalendarGrid = ({
                           Equipe {teamName}
                         </span>
                       </div>
+                      {/* Indicador de turno trocado */}
+                      {shift.isSwapped && (
+                        <div
+                          className="flex items-center gap-1.5 mt-2 pt-2"
+                          style={{ borderTop: "1px dashed var(--color-accent-dim)" }}
+                        >
+                          <ArrowLeftRight size={11} style={{ color: "var(--color-accent)" }} />
+                          <span className="text-[11px] font-semibold" style={{ color: "var(--color-accent-text)" }}>
+                            Turno trocado
+                            {shift.swappedWithUserName
+                              ? ` com ${shift.swappedWithUserName}`
+                              : ""}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -414,6 +457,45 @@ export const CalendarGrid = ({
                     </p>
                   </div>
                 )}
+
+                {/* Seção de ausências do dia */}
+                {(() => {
+                  const allAbsences = modalShifts.flatMap((s) => s.absences ?? []);
+                  // Deduplica por absenceId
+                  const unique = allAbsences.filter(
+                    (a, idx, arr) => arr.findIndex((x) => x.absenceId === a.absenceId) === idx
+                  );
+                  if (unique.length === 0) return null;
+                  return (
+                    <div
+                      className="rounded-xl p-4 mt-1"
+                      style={{
+                        backgroundColor: "var(--color-warning-subtle)",
+                        border: "1px solid var(--color-warning)",
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5 mb-3">
+                        <Palmtree size={14} style={{ color: "var(--color-warning)" }} />
+                        <h4 className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-warning)" }}>
+                          Ausências do Dia ({unique.length})
+                        </h4>
+                      </div>
+                      <ul className="space-y-2">
+                        {unique.map((a) => (
+                          <li key={a.absenceId} className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
+                            <span className="font-semibold" style={{ color: "var(--color-text)" }}>{a.userName}</span>
+                            {" — "}{a.typeDescription}
+                            {a.substituteUserName && (
+                              <span className="text-[11px] ml-1" style={{ color: "var(--color-text-faint)" }}>
+                                (Cobertura: {a.substituteUserName})
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>

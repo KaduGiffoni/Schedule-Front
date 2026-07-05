@@ -84,65 +84,125 @@ export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
     editorProps: {
       attributes: {
         class:
-          "prose prose-sm max-w-none focus:outline-none min-h-[260px] p-5 text-[14px] overflow-y-auto bg-[#fbf9fa]",
+          "prose prose-sm max-w-none focus:outline-none min-h-[260px] p-5 text-[14px] overflow-y-auto",
       },
     },
   });
 
   if (!editor) return null;
 
-  const ToolbarButton = ({ onClick, active, icon, title }: any) => (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`
-        w-9 h-9 rounded-[6px]
-        flex items-center justify-center
-        transition-all
-        border
-        ${
-          active
-            ? "bg-[#0058be] text-white border-[#0058be]"
-            : "bg-white text-[#44474c] border-transparent hover:bg-[#eef4ff]"
-        }
-      `}
-    >
-      {icon}
-    </button>
+  const ToolbarButton = ({
+    onClick,
+    active,
+    icon,
+    title,
+  }: {
+    onClick: () => void;
+    active?: boolean;
+    icon: React.ReactNode;
+    title: string;
+  }) => {
+    const [hovered, setHovered] = React.useState(false);
+
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        aria-label={title}
+        aria-pressed={active}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: "36px",
+          height: "36px",
+          borderRadius: "6px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "background-color 120ms ease-out, color 120ms ease-out",
+          border: active
+            ? "1px solid var(--color-accent)"
+            : "1px solid transparent",
+          backgroundColor: active
+            ? "var(--color-accent)"
+            : hovered
+            ? "var(--color-surface-dim)"
+            : "transparent",
+          color: active
+            ? "white"
+            : hovered
+            ? "var(--color-text)"
+            : "var(--color-text-muted)",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </button>
+    );
+  };
+
+  const Divider = () => (
+    <div
+      style={{
+        width: "1px",
+        alignSelf: "stretch",
+        backgroundColor: "var(--color-border)",
+        margin: "0 2px",
+      }}
+    />
   );
 
   return (
-    <div className="w-full border border-[#c4c6cd] rounded-[10px] overflow-hidden bg-white shadow-sm">
+    <div
+      style={{
+        width: "100%",
+        border: "1px solid var(--color-border)",
+        borderRadius: "10px",
+        overflow: "hidden",
+        backgroundColor: "var(--color-surface)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
       {/* TOOLBAR */}
-      <div className="flex flex-wrap gap-2 p-3 border-b border-[#e4e2e3] bg-[#f8fafc]">
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "4px",
+          padding: "8px 12px",
+          borderBottom: "1px solid var(--color-border-subtle)",
+          backgroundColor: "var(--color-surface-dim)",
+        }}
+      >
         <ToolbarButton
           title="Negrito"
           active={editor.isActive("bold")}
-          icon={<Bold size={16} />}
+          icon={<Bold size={15} />}
           onClick={() => editor.chain().focus().toggleBold().run()}
         />
 
         <ToolbarButton
           title="Itálico"
           active={editor.isActive("italic")}
-          icon={<Italic size={16} />}
+          icon={<Italic size={15} />}
           onClick={() => editor.chain().focus().toggleItalic().run()}
         />
 
         <ToolbarButton
           title="Sublinhado"
           active={editor.isActive("underline")}
-          icon={<UnderlineIcon size={16} />}
+          icon={<UnderlineIcon size={15} />}
           onClick={() => editor.chain().focus().toggleUnderline().run()}
         />
 
-        <div className="w-px bg-[#d7dbe2] mx-1" />
+        <Divider />
 
         <ToolbarButton
           title="Título 1"
           active={editor.isActive("heading", { level: 1 })}
-          icon={<Heading1 size={16} />}
+          icon={<Heading1 size={15} />}
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 1 }).run()
           }
@@ -151,47 +211,47 @@ export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
         <ToolbarButton
           title="Título 2"
           active={editor.isActive("heading", { level: 2 })}
-          icon={<Heading2 size={16} />}
+          icon={<Heading2 size={15} />}
           onClick={() =>
             editor.chain().focus().toggleHeading({ level: 2 }).run()
           }
         />
 
-        <div className="w-px bg-[#d7dbe2] mx-1" />
+        <Divider />
 
         <ToolbarButton
           title="Lista"
           active={editor.isActive("bulletList")}
-          icon={<List size={16} />}
+          icon={<List size={15} />}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         />
 
         <ToolbarButton
           title="Lista Numerada"
           active={editor.isActive("orderedList")}
-          icon={<ListOrdered size={16} />}
+          icon={<ListOrdered size={15} />}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         />
 
         <ToolbarButton
           title="Citação"
           active={editor.isActive("blockquote")}
-          icon={<Quote size={16} />}
+          icon={<Quote size={15} />}
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
         />
 
         <ToolbarButton
           title="Código"
           active={editor.isActive("codeBlock")}
-          icon={<Code2 size={16} />}
+          icon={<Code2 size={15} />}
           onClick={() => editor.chain().focus().toggleCodeBlock().run()}
         />
 
-        <div className="w-px bg-[#d7dbe2] mx-1" />
+        <Divider />
 
         <ToolbarButton
           title="Tabela"
-          icon={<TableIcon size={16} />}
+          icon={<TableIcon size={15} />}
           onClick={() =>
             editor
               .chain()
@@ -207,33 +267,34 @@ export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
 
         <ToolbarButton
           title="Link"
-          icon={<Link2 size={16} />}
+          icon={<Link2 size={15} />}
           onClick={() => {
             const url = window.prompt("Digite a URL");
-
             if (url) {
               editor.chain().focus().setLink({ href: url }).run();
             }
           }}
         />
 
-        <div className="w-px bg-[#d7dbe2] mx-1" />
+        <Divider />
 
         <ToolbarButton
           title="Desfazer"
-          icon={<Undo2 size={16} />}
+          icon={<Undo2 size={15} />}
           onClick={() => editor.chain().focus().undo().run()}
         />
 
         <ToolbarButton
           title="Refazer"
-          icon={<Redo2 size={16} />}
+          icon={<Redo2 size={15} />}
           onClick={() => editor.chain().focus().redo().run()}
         />
       </div>
 
       {/* EDITOR */}
-      <EditorContent editor={editor} />
+      <div style={{ backgroundColor: "var(--color-surface)" }}>
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 };

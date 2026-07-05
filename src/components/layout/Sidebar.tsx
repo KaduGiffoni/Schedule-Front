@@ -1,5 +1,6 @@
 import React from "react";
 import { useLocation, Link } from "react-router-dom";
+import { useHasRole } from "../../lib/useHasRole";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -8,6 +9,9 @@ import {
   Users,
   Home,
   Radio,
+  CalendarOff,
+  Megaphone,
+  ShieldCheck,
 } from "lucide-react";
 
 interface MenuItem {
@@ -16,124 +20,211 @@ interface MenuItem {
   path: string;
 }
 
+interface MenuGroup {
+  label: string;
+  items: MenuItem[];
+}
+
 export const Sidebar = () => {
   const location = useLocation();
-
-  // TODO: Conectar ao AuthStore quando o backend fornecer o campo 'role' no perfil
-  const menuItems: MenuItem[] = [
-    { icon: Home,            label: "Início",           path: "/home" },
-    { icon: LayoutDashboard, label: "Painel de Escalas", path: "/dashboard" },
-    { icon: ArrowLeftRight,  label: "Mural e Plantão",  path: "/comunicacao" },
-    { icon: Users,           label: "Usuários",          path: "/users" },
-  ];
+  const isAdminOrManager = useHasRole('Admin', 'Manager');
+  const isAdmin = useHasRole('Admin');
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/");
 
+  const groups: MenuGroup[] = [
+    {
+      label: "Operação",
+      items: [
+        { icon: Home,            label: "Início",           path: "/home" },
+        { icon: LayoutDashboard, label: "Painel de Escalas", path: "/dashboard" },
+        { icon: Megaphone,       label: "Mural e Plantão",  path: "/comunicacao" },
+        { icon: ArrowLeftRight,  label: "Trocas de Turno",  path: "/trocas" },
+        { icon: CalendarOff,     label: "Ausências",         path: "/ausencias" },
+      ],
+    },
+    // Grupo "Gestão" só aparece para Admin/Manager
+    ...(isAdminOrManager
+      ? [{
+          label: "Gestão",
+          items: [
+            { icon: Users,       label: "Usuários",       path: "/users" },
+            ...(isAdmin ? [{ icon: ShieldCheck, label: "Administração", path: "/administracao" }] : []),
+          ] as MenuItem[],
+        }]
+      : []),
+  ];
+
+  const systemItems: MenuItem[] = [
+    { icon: Settings,   label: "Configurações", path: "/configuracoes" },
+    { icon: HelpCircle, label: "Suporte",        path: "/suporte" },
+  ];
+
+  const linkStyle = (active: boolean): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "9px 12px",
+    borderRadius: "6px",
+    fontSize: "13.5px",
+    fontWeight: 500,
+    textDecoration: "none",
+    transition: "background-color 150ms ease-out, color 150ms ease-out",
+    color: active ? "var(--color-accent-text)" : "var(--color-text-muted)",
+    backgroundColor: active ? "var(--color-accent-dim)" : "transparent",
+  });
+
+  const renderLink = (item: MenuItem) => {
+    const active = isActive(item.path);
+    return (
+      <Link
+        key={item.path}
+        to={item.path}
+        style={linkStyle(active)}
+        onMouseEnter={(e) => {
+          if (!active) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+            (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!active) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+            (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+          }
+        }}
+      >
+        <item.icon
+          size={16}
+          strokeWidth={active ? 2.5 : 1.8}
+          style={{ color: active ? "var(--color-accent)" : "inherit", flexShrink: 0 }}
+        />
+        <span>{item.label}</span>
+      </Link>
+    );
+  };
+
   return (
     <aside
-      className="w-[240px] h-screen flex flex-col shrink-0"
       style={{
+        width: "220px",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "column",
+        flexShrink: 0,
         backgroundColor: "var(--color-sidebar-bg)",
         borderRight: "1px solid var(--color-sidebar-border)",
       }}
     >
-      {/* ── Logo / Brand ─────────────────────────────────────────── */}
-      <div className="px-5 pt-6 pb-5" style={{ borderBottom: "1px solid var(--color-border-subtle)" }}>
-        <div className="flex items-center gap-2.5">
+      {/* ── Logo / Brand ───────────────────────────────────────── */}
+      <div
+        style={{
+          padding: "20px 16px 18px",
+          borderBottom: "1px solid var(--color-border-subtle)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-            style={{ backgroundColor: "var(--color-accent)" }}
+            style={{
+              width: "32px", height: "32px",
+              borderRadius: "8px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              backgroundColor: "var(--color-accent)",
+              flexShrink: 0,
+            }}
           >
             <Radio size={16} color="white" strokeWidth={2} />
           </div>
           <div>
-            <p className="text-[15px] font-bold leading-none" style={{ color: "var(--color-text)" }}>
+            <p style={{ fontSize: "15px", fontWeight: 700, lineHeight: 1, color: "var(--color-text)" }}>
               NOC-PRO
             </p>
-            <p className="text-[11px] font-medium mt-0.5" style={{ color: "var(--color-text-faint)" }}>
+            <p style={{ fontSize: "11px", fontWeight: 500, marginTop: "2px", color: "var(--color-text-faint)" }}>
               Gestão de Turnos
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Navegação principal ───────────────────────────────────── */}
-      <nav className="flex-1 px-3 pt-4 flex flex-col gap-0.5">
-        {menuItems.map((item) => {
-          const active = isActive(item.path);
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-[6px] text-[13.5px] font-medium transition-all duration-150"
+      {/* ── Navegação por grupos ───────────────────────────────── */}
+      <nav style={{ flex: 1, padding: "12px 8px", display: "flex", flexDirection: "column", gap: "20px", overflowY: "auto" }}>
+        {groups.map((group) => (
+          <div key={group.label}>
+            {/* Rótulo do grupo */}
+            <p
               style={{
-                color: active ? "var(--color-accent-text)" : "var(--color-text-muted)",
-                backgroundColor: active ? "var(--color-accent-dim)" : "transparent",
-              }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor =
-                    "var(--color-surface-raised)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
-                }
+                fontSize: "10px",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+                color: "var(--color-text-faint)",
+                padding: "0 12px",
+                marginBottom: "4px",
               }}
             >
-              <item.icon
-                size={17}
-                strokeWidth={active ? 2.5 : 1.8}
-                style={{ color: active ? "var(--color-accent)" : "inherit" }}
-              />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+              {group.label}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+              {group.items.map(renderLink)}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* ── Navegação secundária ──────────────────────────────────── */}
+      {/* ── Navegação sistema ─────────────────────────────────── */}
       <div
-        className="px-3 pb-5 pt-3 flex flex-col gap-0.5"
-        style={{ borderTop: "1px solid var(--color-border-subtle)" }}
+        style={{
+          padding: "8px 8px 16px",
+          borderTop: "1px solid var(--color-border-subtle)",
+          flexShrink: 0,
+        }}
       >
-        {[
-          { icon: Settings,    label: "Configurações", path: "/configuracoes" },
-          { icon: HelpCircle,  label: "Suporte",       path: "/suporte" },
-        ].map((item) => {
-          const active = isActive(item.path);
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-[6px] text-[13.5px] font-medium transition-all duration-150"
-              style={{
-                color: active ? "var(--color-accent-text)" : "var(--color-text-faint)",
-                backgroundColor: active ? "var(--color-accent-dim)" : "transparent",
-              }}
-              onMouseEnter={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor =
-                    "var(--color-surface-raised)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!active) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)";
-                }
-              }}
-            >
-              <item.icon size={16} strokeWidth={1.8} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        {/* Rótulo sistema */}
+        <p
+          style={{
+            fontSize: "10px",
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "var(--color-text-faint)",
+            padding: "8px 12px 4px",
+          }}
+        >
+          Sistema
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+          {systemItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                style={{
+                  ...linkStyle(active),
+                  fontSize: "13px",
+                  color: active ? "var(--color-accent-text)" : "var(--color-text-faint)",
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+                    (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                    (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)";
+                  }
+                }}
+              >
+                <item.icon size={15} strokeWidth={1.8} style={{ flexShrink: 0 }} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </aside>
   );

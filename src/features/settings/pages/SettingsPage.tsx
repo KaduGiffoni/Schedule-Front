@@ -7,18 +7,19 @@ import {
   Calendar,
   AlertTriangle,
   Repeat,
+  Loader2,
 } from "lucide-react";
 import { holidayService, type Holiday } from "../api/holidayService";
 import { InputField } from "../../../components/ui/InputField";
 import { Button } from "../../../components/ui/Button";
-import { Header } from "../../../components/layout/Header";
-import { Sidebar } from "../../../components/layout/Sidebar";
+import { Modal } from "../../../components/ui/Modal";
+import { showToast } from "../../../lib/toastStore";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("feriados");
 
   const [holidays, setHolidays] = useState<Holiday[]>([]);
-  const [needsSync, setNeedsSync] = useState(false); // 👇 Novo estado
+  const [needsSync, setNeedsSync] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const [syncYear, setSyncYear] = useState(new Date().getFullYear());
@@ -27,7 +28,6 @@ export default function SettingsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
-  // 👇 formData agora inclui o isRecurring
   const [formData, setFormData] = useState({
     name: "",
     date: "",
@@ -40,38 +40,32 @@ export default function SettingsPage() {
     setIsLoading(true);
     try {
       const response = await holidayService.getAll();
-      // 👇 Atualiza a lista e o estado de sincronização com o novo formato do backend
       setHolidays(response.data);
       setNeedsSync(response.needsSync);
       if (response.currentYear) setSyncYear(response.currentYear);
-    } catch (error) {
-      console.error("Erro ao carregar feriados", error);
+    } catch {
+      showToast("Erro ao carregar feriados.", "error");
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchHolidays();
-  }, []);
+  useEffect(() => { fetchHolidays(); }, []);
 
   const handleSync = async () => {
     setIsSyncing(true);
     try {
       await holidayService.syncHolidays(syncYear);
       await fetchHolidays();
-      alert(`Feriados de ${syncYear} sincronizados com sucesso!`);
-    } catch (error: any) {
-      console.error("Erro completo da sincronização:", error);
-
-      // Captura a mensagem exata do C# ou do Axios
-      const backendMessage =
-        error.response?.data?.Message ||
-        error.response?.data?.title ||
-        error.message ||
+      showToast(`Feriados de ${syncYear} sincronizados com sucesso!`, "success");
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { Message?: string; title?: string } }; message?: string };
+      const msg =
+        err.response?.data?.Message ||
+        err.response?.data?.title ||
+        err.message ||
         "Erro interno no servidor.";
-
-      alert(`Falha ao sincronizar: ${backendMessage}`);
+      showToast(`Falha ao sincronizar: ${msg}`, "error");
     } finally {
       setIsSyncing(false);
     }
@@ -100,13 +94,15 @@ export default function SettingsPage() {
     try {
       if (editingId) {
         await holidayService.updateHoliday(editingId, formData);
+        showToast("Feriado atualizado com sucesso!", "success");
       } else {
         await holidayService.createHoliday(formData);
+        showToast("Feriado adicionado com sucesso!", "success");
       }
       await fetchHolidays();
       setIsModalOpen(false);
-    } catch (error) {
-      alert("Erro ao salvar feriado.");
+    } catch {
+      showToast("Erro ao salvar feriado. Verifique os dados e tente novamente.", "error");
     } finally {
       setIsSaving(false);
     }
@@ -117,286 +113,368 @@ export default function SettingsPage() {
     return `${day}/${month}/${year}`;
   };
 
+  const tabStyle = (id: string): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "10px 14px",
+    fontSize: "14px",
+    fontWeight: 600,
+    borderRadius: "6px",
+    border: "none",
+    cursor: "pointer",
+    width: "100%",
+    transition: "background-color 150ms ease-out, color 150ms ease-out",
+    backgroundColor: activeTab === id ? "var(--color-accent-dim)" : "transparent",
+    color: activeTab === id ? "var(--color-accent-text)" : "var(--color-text-muted)",
+  });
+
   return (
-    <div className="flex h-screen w-full bg-[#fbf9fa] font-sans overflow-hidden text-[#1b1c1d]">
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <main className="flex-1 p-8 overflow-y-auto">
-          <div className="mb-8">
-            <h1 className="text-[28px] font-extrabold text-[#041627] tracking-tight">
-              Configurações do Sistema
-            </h1>
-            <p className="text-[14px] text-[#74777d] mt-1">
-              Gerencie parâmetros globais, feriados e regras de negócio do NOC.
-            </p>
-          </div>
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        backgroundColor: "var(--color-bg)",
+        color: "var(--color-text)",
+      }}
+    >
+      <main style={{ flex: 1, padding: "32px", overflowY: "auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: "28px" }}>
+          <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--color-text)", letterSpacing: "-0.02em" }}>
+            Configurações do Sistema
+          </h1>
+          <p style={{ fontSize: "14px", color: "var(--color-text-faint)", marginTop: "4px" }}>
+            Gerencie parâmetros globais, feriados e regras de negócio do NOC.
+          </p>
+        </div>
 
-          <div className="flex gap-8 items-start">
-            <aside className="w-[240px] shrink-0 bg-white rounded-[8px] border border-[#e4e2e3] shadow-sm p-2 flex flex-col gap-1">
-              <button
-                onClick={() => setActiveTab("geral")}
-                className={`flex items-center gap-3 px-4 py-3 text-[14px] font-semibold rounded-[6px] transition-colors ${activeTab === "geral" ? "bg-[#f5f7fb] text-[#0058be]" : "text-[#44474c] hover:bg-[#fbf9fa]"}`}
-              >
-                <SettingsIcon size={18} /> Geral
-              </button>
-              <button
-                onClick={() => setActiveTab("feriados")}
-                className={`flex items-center gap-3 px-4 py-3 text-[14px] font-semibold rounded-[6px] transition-colors ${activeTab === "feriados" ? "bg-[#f5f7fb] text-[#0058be]" : "text-[#44474c] hover:bg-[#fbf9fa]"}`}
-              >
-                <Calendar size={18} /> Feriados da Escala
-              </button>
-            </aside>
+        <div style={{ display: "flex", gap: "28px", alignItems: "flex-start" }}>
+          {/* Sidebar de tabs */}
+          <aside
+            style={{
+              width: "220px",
+              flexShrink: 0,
+              backgroundColor: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "10px",
+              boxShadow: "var(--shadow-sm)",
+              padding: "8px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "2px",
+            }}
+          >
+            <button style={tabStyle("geral")} onClick={() => setActiveTab("geral")}>
+              <SettingsIcon size={17} /> Geral
+            </button>
+            <button style={tabStyle("feriados")} onClick={() => setActiveTab("feriados")}>
+              <Calendar size={17} /> Feriados da Escala
+            </button>
+          </aside>
 
-            <div className="flex-1">
-              {activeTab === "feriados" && (
-                <div className="flex flex-col gap-6 animate-in fade-in duration-300">
-                  {/* 👇 Novo Alerta de Sincronização baseado no C# */}
-                  {needsSync && !isLoading && (
-                    <div className="bg-[#fffbeb] border border-[#fde68a] rounded-[8px] p-4 flex items-center justify-between shadow-sm animate-in slide-in-from-top-2">
-                      <div className="flex items-center gap-3 text-[#b45309]">
-                        <AlertTriangle size={24} className="shrink-0" />
-                        <div>
-                          <h4 className="text-[14px] font-bold">
-                            Atualização Pendente
-                          </h4>
-                          <p className="text-[12px] font-medium mt-0.5 opacity-90">
-                            A base de feriados não está íntegra para o ano
-                            atual. Recomendamos realizar a sincronização
-                            nacional.
-                          </p>
-                        </div>
+          {/* Conteúdo */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {activeTab === "feriados" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+                {/* Alerta de sincronização */}
+                {needsSync && !isLoading && (
+                  <div
+                    style={{
+                      backgroundColor: "var(--color-warning-subtle)",
+                      border: "1px solid var(--color-warning)",
+                      borderRadius: "10px",
+                      padding: "14px 18px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "16px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <AlertTriangle size={22} style={{ color: "var(--color-warning)", flexShrink: 0 }} />
+                      <div>
+                        <p style={{ fontSize: "14px", fontWeight: 700, color: "var(--color-text)" }}>
+                          Atualização Pendente
+                        </p>
+                        <p style={{ fontSize: "12px", color: "var(--color-text-muted)", marginTop: "2px" }}>
+                          A base de feriados não está íntegra para o ano atual. Recomendamos sincronizar.
+                        </p>
                       </div>
-                      <Button
-                        onClick={handleSync}
-                        disabled={isSyncing}
-                        className="bg-[#d97706] hover:bg-[#b45309] text-white shrink-0"
-                      >
-                        {isSyncing ? "Sincronizando..." : "Sincronizar Agora"}
-                      </Button>
                     </div>
-                  )}
-
-                  <div className="bg-white rounded-[8px] border border-[#e4e2e3] shadow-sm p-6 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-[16px] font-bold text-[#041627]">
-                        Integração Nacional
-                      </h3>
-                      <p className="text-[13px] text-[#74777d] mt-1">
-                        Busque feriados automaticamente da API Nacional por ano.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 bg-[#f5f7fb] p-1.5 rounded-[6px] border border-[#e4e2e3]">
-                        <input
-                          type="number"
-                          className="w-20 bg-transparent text-center text-[14px] font-bold outline-none"
-                          value={syncYear}
-                          onChange={(e) => setSyncYear(Number(e.target.value))}
-                        />
-                        <Button
-                          onClick={handleSync}
-                          disabled={isSyncing}
-                          variant="outline"
-                          className="h-8 px-3 text-[12px] bg-white"
-                        >
-                          <RefreshCw
-                            size={14}
-                            className={`mr-2 ${isSyncing ? "animate-spin" : ""}`}
-                          />
-                          API
-                        </Button>
-                      </div>
-                      <div className="w-px h-8 bg-[#e4e2e3]"></div>
-                      <Button
-                        onClick={openNewModal}
-                        className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white"
-                      >
-                        <Plus size={18} className="mr-2" /> Novo Manual
-                      </Button>
-                    </div>
+                    <Button onClick={handleSync} disabled={isSyncing} style={{ backgroundColor: "var(--color-warning)", color: "white", flexShrink: 0 }}>
+                      {isSyncing ? "Sincronizando..." : "Sincronizar Agora"}
+                    </Button>
                   </div>
+                )}
 
-                  <div className="bg-white rounded-[8px] border border-[#e4e2e3] shadow-sm overflow-hidden">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-[#f8fafc] border-b border-[#e4e2e3]">
-                          <th className="px-6 py-4 text-[12px] font-bold text-[#74777d] uppercase tracking-wider">
-                            Data
+                {/* Card de integração */}
+                <div
+                  style={{
+                    backgroundColor: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "10px",
+                    boxShadow: "var(--shadow-sm)",
+                    padding: "20px 24px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "16px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--color-text)" }}>
+                      Integração Nacional
+                    </h3>
+                    <p style={{ fontSize: "13px", color: "var(--color-text-faint)", marginTop: "4px" }}>
+                      Busque feriados automaticamente da API Nacional por ano.
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                        backgroundColor: "var(--color-surface-dim)",
+                        padding: "6px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid var(--color-border)",
+                      }}
+                    >
+                      <input
+                        type="number"
+                        style={{
+                          width: "72px",
+                          background: "transparent",
+                          textAlign: "center",
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          outline: "none",
+                          border: "none",
+                          color: "var(--color-text)",
+                        }}
+                        value={syncYear}
+                        onChange={(e) => setSyncYear(Number(e.target.value))}
+                      />
+                      <Button onClick={handleSync} disabled={isSyncing} variant="outline" size="sm">
+                        <RefreshCw size={13} className={isSyncing ? "animate-spin" : ""} />
+                        &nbsp;API
+                      </Button>
+                    </div>
+                    <div style={{ width: "1px", height: "32px", backgroundColor: "var(--color-border)" }} />
+                    <Button onClick={openNewModal} style={{ backgroundColor: "var(--color-accent)", color: "white" }}>
+                      <Plus size={16} />&nbsp;Novo Manual
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tabela de feriados */}
+                <div
+                  style={{
+                    backgroundColor: "var(--color-surface)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: "10px",
+                    boxShadow: "var(--shadow-sm)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "var(--color-surface-dim)", borderBottom: "1px solid var(--color-border)" }}>
+                        {["Data", "Nome do Feriado", "Tipo", ""].map((h) => (
+                          <th
+                            key={h}
+                            style={{
+                              padding: "12px 20px",
+                              fontSize: "11px",
+                              fontWeight: 700,
+                              color: "var(--color-text-faint)",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.06em",
+                              textAlign: h === "" ? "right" : "left",
+                            }}
+                          >
+                            {h}
                           </th>
-                          <th className="px-6 py-4 text-[12px] font-bold text-[#74777d] uppercase tracking-wider">
-                            Nome do Feriado
-                          </th>
-                          <th className="px-6 py-4 text-[12px] font-bold text-[#74777d] uppercase tracking-wider">
-                            Tipo
-                          </th>
-                          <th className="px-6 py-4 text-[12px] font-bold text-[#74777d] uppercase tracking-wider text-right">
-                            Ações
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#efedef]">
-                        {isLoading ? (
-                          <tr>
-                            <td
-                              colSpan={4}
-                              className="text-center py-10 text-[#74777d]"
-                            >
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan={4} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-faint)" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                              <Loader2 size={18} className="animate-spin" style={{ color: "var(--color-accent)" }} />
                               Carregando feriados...
-                            </td>
-                          </tr>
-                        ) : holidays.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={4}
-                              className="text-center py-10 text-[#74777d]"
-                            >
-                              Nenhum feriado cadastrado.
-                            </td>
-                          </tr>
-                        ) : (
-                          holidays.map((h) => (
-                            <tr
-                              key={h.id}
-                              className="hover:bg-[#fbf9fa] transition-colors group"
-                            >
-                              <td className="px-6 py-4 text-[14px] font-bold text-[#1b1c1d]">
-                                {formatDateBR(h.date)}
-                                {h.isRecurring && (
-                                  <span
-                                    title="Repete anualmente"
-                                    className="ml-2 text-[#0058be] inline-flex align-middle"
-                                  >
-                                    <Repeat size={14} />
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 text-[14px] font-medium text-[#44474c]">
-                                {h.name}
-                              </td>
-                              <td className="px-6 py-4">
-                                <span className="bg-blue-50 text-blue-700 text-[11px] font-bold px-2.5 py-1 rounded-[4px] uppercase tracking-wide border border-blue-100">
-                                  {h.type}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : holidays.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} style={{ textAlign: "center", padding: "40px", color: "var(--color-text-faint)", fontSize: "14px" }}>
+                            Nenhum feriado cadastrado. Sincronize a API ou adicione manualmente.
+                          </td>
+                        </tr>
+                      ) : (
+                        holidays.map((h) => (
+                          <tr
+                            key={h.id}
+                            style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
+                            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)"; }}
+                            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                          >
+                            <td style={{ padding: "14px 20px", fontSize: "14px", fontWeight: 700, color: "var(--color-text)" }}>
+                              {formatDateBR(h.date)}
+                              {h.isRecurring && (
+                                <span title="Repete anualmente" style={{ marginLeft: "6px", color: "var(--color-accent)", display: "inline-flex", verticalAlign: "middle" }}>
+                                  <Repeat size={13} />
                                 </span>
-                              </td>
-                              <td className="px-6 py-4 text-right">
-                                <button
-                                  onClick={() => openEditModal(h)}
-                                  className="text-[#0058be] hover:bg-blue-50 p-2 rounded-full transition-colors opacity-0 group-hover:opacity-100"
-                                >
-                                  <Pencil size={16} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                              )}
+                            </td>
+                            <td style={{ padding: "14px 20px", fontSize: "14px", color: "var(--color-text-muted)" }}>
+                              {h.name}
+                            </td>
+                            <td style={{ padding: "14px 20px" }}>
+                              <span style={{
+                                backgroundColor: "var(--color-accent-dim)",
+                                color: "var(--color-accent-text)",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.04em",
+                              }}>
+                                {h.type}
+                              </span>
+                            </td>
+                            <td style={{ padding: "14px 20px", textAlign: "right" }}>
+                              <button
+                                onClick={() => openEditModal(h)}
+                                aria-label={`Editar feriado ${h.name}`}
+                                style={{
+                                  color: "var(--color-accent)",
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  padding: "6px",
+                                  borderRadius: "6px",
+                                  display: "inline-flex",
+                                  transition: "background-color 120ms ease-out",
+                                }}
+                                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-dim)"; }}
+                                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = "transparent"; }}
+                              >
+                                <Pencil size={15} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              )}
-
-              {activeTab === "geral" && (
-                <div className="bg-white rounded-[8px] border border-[#e4e2e3] shadow-sm p-8 text-center text-[#74777d] animate-in fade-in duration-300">
-                  Configurações gerais em desenvolvimento...
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
-            onClick={() => setIsModalOpen(false)}
-          ></div>
-          <div className="relative w-full max-w-[400px] bg-white rounded-[12px] shadow-2xl p-8 animate-in zoom-in-95 duration-200">
-            <h2 className="text-[20px] font-bold text-[#041627] mb-1">
-              {editingId ? "Editar Feriado" : "Adicionar Feriado"}
-            </h2>
-            <p className="text-[13px] text-[#74777d] mb-6">
-              Defina as datas que afetam a escala de trabalho.
-            </p>
-
-            <form onSubmit={handleSave} className="flex flex-col gap-4">
-              <InputField
-                label="Nome do Feriado"
-                id="name"
-                required
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-
-              <InputField
-                label="Data"
-                id="date"
-                type="date"
-                required
-                value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-              />
-
-              <div className="flex flex-col gap-1 w-full">
-                <label className="text-[12px] font-semibold text-[#44474c] uppercase tracking-wider">
-                  Tipo
-                </label>
-                <select
-                  className="w-full h-[40px] px-3 text-[14px] text-[#1b1c1d] bg-[#fbf9fa] border border-[#c4c6cd] rounded-[4px] focus:outline-none focus:border-[#0058be]"
-                  value={formData.type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, type: e.target.value })
-                  }
-                >
-                  <option value="Nacional">Nacional</option>
-                  <option value="Estadual">Estadual</option>
-                  <option value="Municipal">Municipal</option>
-                  <option value="Facultativo">Ponto Facultativo</option>
-                </select>
               </div>
+            )}
 
-              {/* 👇 Novo Checkbox de Recorrência */}
-              <div className="flex items-center gap-2 mt-2 mb-2">
-                <input
-                  type="checkbox"
-                  id="isRecurring"
-                  checked={formData.isRecurring}
-                  onChange={(e) =>
-                    setFormData({ ...formData, isRecurring: e.target.checked })
-                  }
-                  className="w-4 h-4 text-[#1d4ed8] bg-[#fbf9fa] border-[#c4c6cd] rounded focus:ring-[#0058be] cursor-pointer"
-                />
-                <label
-                  htmlFor="isRecurring"
-                  className="text-[13px] font-semibold text-[#44474c] cursor-pointer select-none"
-                >
-                  Feriado Recorrente (Repete todos os anos)
-                </label>
+            {activeTab === "geral" && (
+              <div
+                style={{
+                  backgroundColor: "var(--color-surface)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "10px",
+                  boxShadow: "var(--shadow-sm)",
+                  padding: "40px",
+                  textAlign: "center",
+                  color: "var(--color-text-faint)",
+                  fontSize: "14px",
+                }}
+              >
+                Configurações gerais em desenvolvimento...
               </div>
-
-              <div className="flex justify-end gap-3 mt-2 pt-4 border-t border-[#efedef]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsModalOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isSaving}
-                  className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white"
-                >
-                  {isSaving ? "A guardar..." : "Salvar Feriado"}
-                </Button>
-              </div>
-            </form>
+            )}
           </div>
         </div>
+      </main>
+
+      {/* Modal criar/editar feriado — usa componente Modal.tsx */}
+      {isModalOpen && (
+        <Modal
+          title={editingId ? "Editar Feriado" : "Adicionar Feriado"}
+          icon={<Calendar size={18} />}
+          onClose={() => setIsModalOpen(false)}
+          size="sm"
+        >
+          <p style={{ fontSize: "13px", color: "var(--color-text-faint)", marginBottom: "20px", marginTop: "-4px" }}>
+            Defina as datas que afetam a escala de trabalho.
+          </p>
+          <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <InputField
+              label="Nome do Feriado"
+              id="holiday-name"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            />
+            <InputField
+              label="Data"
+              id="holiday-date"
+              type="date"
+              required
+              value={formData.date}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+            />
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                Tipo
+              </label>
+              <select
+                style={{
+                  width: "100%",
+                  height: "40px",
+                  padding: "0 12px",
+                  fontSize: "14px",
+                  color: "var(--color-text)",
+                  backgroundColor: "var(--color-surface-dim)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "6px",
+                  outline: "none",
+                }}
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              >
+                <option value="Nacional">Nacional</option>
+                <option value="Estadual">Estadual</option>
+                <option value="Municipal">Municipal</option>
+                <option value="Facultativo">Ponto Facultativo</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <input
+                type="checkbox"
+                id="holiday-recurring"
+                checked={formData.isRecurring}
+                onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
+                style={{ width: "16px", height: "16px", accentColor: "var(--color-accent)", cursor: "pointer" }}
+              />
+              <label htmlFor="holiday-recurring" style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-text-muted)", cursor: "pointer" }}>
+                Feriado Recorrente (repete todos os anos)
+              </label>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "8px", borderTop: "1px solid var(--color-border-subtle)", marginTop: "4px" }}>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={isSaving} style={{ backgroundColor: "var(--color-accent)", color: "white" }}>
+                {isSaving ? "Salvando..." : "Salvar Feriado"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

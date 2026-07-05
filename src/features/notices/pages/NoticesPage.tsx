@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   AlertTriangle,
   Megaphone,
@@ -6,23 +6,42 @@ import {
   MessageSquare,
   Send,
   Plus,
-  X,
   Loader2,
   User,
 } from "lucide-react";
-import type { NoticeBoardResponse } from "../types";
+import type { Notice } from "../types";
 import { noticesService } from "../api/noticesService";
+import { holidayService } from "../../settings/api/holidayService";
 import { Button } from "../../../components/ui/Button";
 import { InputField } from "../../../components/ui/InputField";
 import { RichTextEditor } from "../../../components/ui/RichTextEditor";
+import { Modal } from "../../../components/ui/Modal";
+import { useSearchParams } from "react-router-dom";
+import { useHasRole } from "../../../lib/useHasRole";
+import { showToast } from "../../../lib/toastStore";
 
 export default function NoticesPage() {
-  const [boardData, setBoardData] = useState<NoticeBoardResponse | null>(null);
+  // ── State principal: array simples de avisos ────────────────────────────────
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [activeTab, setActiveTab] = useState<"Geral" | "Turno">("Turno");
   const [isLoading, setIsLoading] = useState(true);
+
+  // Query param para destacar um notice específico (vindo do dropdown de notificações)
+  const [searchParams] = useSearchParams();
+  const [highlightedNoticeId, setHighlightedNoticeId] = useState<number | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+
+  // Controle de acesso: só Admin/Manager podem criar avisos
+  const canCreateNotice = useHasRole('Admin', 'Manager');
+
+  // ── State do banner de feriados (buscado separadamente via /api/Holidays) ──
+  const [holidayNeedsSync, setHolidayNeedsSync] = useState(false);
+  const [holidayCurrentYear, setHolidayCurrentYear] = useState<number>(
+    new Date().getFullYear(),
+  );
   const [isSyncingHolidays, setIsSyncingHolidays] = useState(false);
 
-  // Estados para Comentários Dinâmicos
+  // ── Estados para Comentários Dinâmicos ──────────────────────────────────────
   const [commentInputs, setCommentInputs] = useState<Record<number, string>>(
     {},
   );
@@ -30,7 +49,7 @@ export default function NoticesPage() {
     Record<number, boolean>
   >({});
 
-  // Estados do Modal de Criação
+  // ── Estados do Modal de Criação ─────────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSavingNotice, setIsSavingNotice] = useState(false);
   const [newNotice, setNewNotice] = useState({
@@ -39,48 +58,66 @@ export default function NoticesPage() {
     content: "",
   });
 
+  // ── Fetch dos avisos (retorno é Notice[] direto) ────────────────────────────
   const fetchBoard = async () => {
     try {
       const data = await noticesService.getMyBoard();
-
-      // 👇 Blindagem: Garante que mesmo se a API responder algo estranho, a estrutura básica exista
-      if (data && data.data) {
-        setBoardData(data);
-      } else {
-        setBoardData({
-          needsSync: false,
-          currentYear: new Date().getFullYear(),
-          data: [],
-        });
-      }
+      setNotices(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Erro ao carregar mural do NOC", error);
-      // 👇 Se der erro na API, joga um array vazio seguro para a tela não apagar
-      setBoardData({
-        needsSync: false,
-        currentYear: new Date().getFullYear(),
-        data: [],
-      });
+      setNotices([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ── Fetch do status de feriados via /api/Holidays ──────────────────────────
+  // Este endpoint SIM retorna { needsSync, currentYear, data }
+  const fetchHolidayStatus = async () => {
+    try {
+      const res = await holidayService.getAll();
+      setHolidayNeedsSync(res.needsSync);
+      setHolidayCurrentYear(res.currentYear);
+    } catch {
+      // Se falhar, simplesmente não exibe o banner — não quebra a página
+      setHolidayNeedsSync(false);
+    }
+  };
+
   useEffect(() => {
     fetchBoard();
+    fetchHolidayStatus();
   }, []);
 
+  // ── Destacar card via ?noticeId=X ──────────────────────────────────────────
+  useEffect(() => {
+    const noticeIdParam = searchParams.get("noticeId");
+    if (!noticeIdParam || isLoading) return;
+    const id = parseInt(noticeIdParam, 10);
+    if (isNaN(id)) return;
+
+    // Encontrar o aviso e mudar para a aba correta
+    const target = notices.find((n) => n.id === id);
+    if (target) {
+      setActiveTab(target.type);
+      setHighlightedNoticeId(id);
+      // Scroll para o card após render
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 150);
+      // Remove o highlight após 3s
+      setTimeout(() => setHighlightedNoticeId(null), 3000);
+    }
+  }, [searchParams, notices, isLoading]);
+
   const handleSyncHolidays = async () => {
-    if (!boardData) return;
     setIsSyncingHolidays(true);
     try {
-      await noticesService.syncHolidays(boardData.currentYear);
-      alert(
-        `Feriados de ${boardData.currentYear} validados e sincronizados com sucesso!`,
-      );
-      await fetchBoard();
-    } catch (error) {
-      alert("Falha ao sincronizar feriados.");
+      await holidayService.syncHolidays(holidayCurrentYear);
+      showToast(`Feriados de ${holidayCurrentYear} sincronizados com sucesso!`, "success");
+      await fetchHolidayStatus();
+    } catch {
+      showToast("Falha ao sincronizar feriados.", "error");
     } finally {
       setIsSyncingHolidays(false);
     }
@@ -89,17 +126,9 @@ export default function NoticesPage() {
   const handleAcknowledge = async (id: number) => {
     try {
       await noticesService.acknowledgeNotice(id);
-      // Otimização de UI: Remove da tela imediatamente sem precisar recarregar tudo
-      setBoardData((prev) =>
-        prev
-          ? {
-              ...prev,
-              data: prev.data.filter((n) => n.id !== id),
-            }
-          : null,
-      );
-    } catch (error) {
-      alert("Erro ao processar ação.");
+      setNotices((prev) => prev.filter((n) => n.id !== id));
+    } catch {
+      showToast("Erro ao processar ação.", "error");
     }
   };
 
@@ -112,9 +141,9 @@ export default function NoticesPage() {
     try {
       await noticesService.addComment(noticeId, text);
       setCommentInputs((prev) => ({ ...prev, [noticeId]: "" }));
-      await fetchBoard(); // Atualiza a thread com o comentário oficial do backend
-    } catch (error) {
-      alert("Não foi possível enviar o comentário.");
+      await fetchBoard();
+    } catch {
+      showToast("Não foi possível enviar o comentário.", "error");
     } finally {
       setIsSubmittingComment((prev) => ({ ...prev, [noticeId]: false }));
     }
@@ -123,7 +152,7 @@ export default function NoticesPage() {
   const handleCreateNotice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNotice.title || !newNotice.content) {
-      alert("Preencha todos os campos do aviso.");
+      showToast("Preencha o título e o conteúdo do aviso.", "warning");
       return;
     }
 
@@ -133,8 +162,9 @@ export default function NoticesPage() {
       setIsModalOpen(false);
       setNewNotice({ title: "", type: "Turno", content: "" });
       await fetchBoard();
-    } catch (error) {
-      alert("Erro ao postar no mural.");
+      showToast("Aviso publicado no mural!", "success");
+    } catch {
+      showToast("Erro ao postar no mural.", "error");
     } finally {
       setIsSavingNotice(false);
     }
@@ -151,38 +181,31 @@ export default function NoticesPage() {
   };
 
   // Filtra as ocorrências de acordo com a aba ativa
-  const filteredNotices =
-    boardData && boardData.data
-      ? boardData.data.filter((n) => n.type === activeTab)
-      : [];
+  const filteredNotices = notices.filter((n) => n.type === activeTab);
+
   if (isLoading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#f5f7fb] h-full w-full">
-        <Loader2 className="w-10 h-10 text-[#0058be] animate-spin mb-2" />
-        <span className="text-[14px] font-semibold text-[#74777d]">
-          Sincronizando mural de operações...
-        </span>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", backgroundColor: "var(--color-bg)", height: "100%", width: "100%" }}>
+        <Loader2 style={{ width: "40px", height: "40px", color: "var(--color-accent)", animation: "spin 1s linear infinite", marginBottom: "8px" }} />
+        <span style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-text-faint)" }}>Sincronizando mural de operações...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#fbf9fa] h-full w-full">
-      {/* 1. BANNER FIXO DE ALERTA DE SINCRONIZAÇÃO */}
-      {boardData?.needsSync && (
-        <div className="bg-[#ba1a1a] text-white px-8 py-3 flex items-center justify-between text-[14px] font-bold shadow-md shrink-0 animate-in slide-in-from-top duration-300">
-          <div className="flex items-center gap-2">
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: "var(--color-bg)", height: "100%", width: "100%", color: "var(--color-text)" }}>
+      {/* 1. BANNER FIXO DE ALERTA DE SINCRONIZAÇÃO DE FERIADOS */}
+      {/* Exibido quando /api/Holidays reporta needsSync=true */}
+      {holidayNeedsSync && (
+        <div style={{ backgroundColor: "var(--color-error)", color: "white", padding: "10px 32px", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "14px", fontWeight: 700, boxShadow: "var(--shadow-md)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <AlertTriangle size={18} className="animate-pulse" />
-            <span>
-              Atenção! O sistema detectou que os feriados de{" "}
-              {boardData.currentYear} ainda não foram validados no banco de
-              dados.
-            </span>
+            <span>Atenção! Os feriados de {holidayCurrentYear} ainda não foram validados no banco de dados.</span>
           </div>
           <button
             disabled={isSyncingHolidays}
             onClick={handleSyncHolidays}
-            className="bg-white/10 hover:bg-white/20 active:bg-white/30 border border-white/40 px-4 py-1 rounded-[4px] text-[12px] font-extrabold uppercase transition-colors"
+            style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.4)", color: "white", padding: "4px 14px", borderRadius: "4px", fontSize: "12px", fontWeight: 800, textTransform: "uppercase", cursor: "pointer" }}
           >
             {isSyncingHolidays ? "Sincronizando..." : "Sincronizar Agora"}
           </button>
@@ -190,171 +213,144 @@ export default function NoticesPage() {
       )}
 
       {/* CONTEÚDO PRINCIPAL */}
-      <div className="flex-1 overflow-y-auto p-8 flex flex-col">
-        {/* Cabeçalho do Painel */}
-        <div className="flex justify-between items-center mb-8 shrink-0">
+      <div style={{ flex: 1, overflowY: "auto", padding: "32px", display: "flex", flexDirection: "column" }}>
+        {/* Cabeçalho */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "28px", flexShrink: 0 }}>
           <div>
-            <h1 className="text-[28px] font-extrabold text-[#041627] tracking-tight">
-              Comunicação e Passagens
-            </h1>
-            <p className="text-[14px] text-[#74777d] mt-1">
-              Mural ativo de ocorrências, passagem de plantão e alertas
-              operacionais.
-            </p>
+            <h1 style={{ fontSize: "28px", fontWeight: 800, color: "var(--color-text)", letterSpacing: "-0.02em" }}>Comunicação e Passagens</h1>
+            <p style={{ fontSize: "14px", color: "var(--color-text-faint)", marginTop: "4px" }}>Mural ativo de ocorrências, passagem de plantão e alertas operacionais.</p>
           </div>
-          <Button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-semibold shadow-sm"
-          >
-            <Plus size={18} className="mr-2" /> Nova Mensagem
-          </Button>
+          {canCreateNotice && (
+            <Button onClick={() => setIsModalOpen(true)} style={{ backgroundColor: "var(--color-accent)", color: "white", width: "auto", padding: "0 20px" }}>
+              <Plus size={16} /> &nbsp;Nova Mensagem
+            </Button>
+          )}
         </div>
 
-        {/* Seleção de Abas Operacionais */}
-        <div className="flex border-b border-[#e4e2e3] mb-6 shrink-0 gap-6">
-          <button
-            onClick={() => setActiveTab("Turno")}
-            className={`flex items-center gap-2 pb-3 text-[15px] font-bold border-b-2 transition-all ${activeTab === "Turno" ? "border-[#0058be] text-[#0058be]" : "border-transparent text-[#74777d] hover:text-[#1b1c1d]"}`}
-          >
-            <ArrowRightLeft size={18} /> Passagem de Turno (
-            {boardData?.data.filter((n) => n.type === "Turno").length})
-          </button>
-          <button
-            onClick={() => setActiveTab("Geral")}
-            className={`flex items-center gap-2 pb-3 text-[15px] font-bold border-b-2 transition-all ${activeTab === "Geral" ? "border-[#0058be] text-[#0058be]" : "border-transparent text-[#74777d] hover:text-[#1b1c1d]"}`}
-          >
-            <Megaphone size={18} /> Avisos Gerais (
-            {boardData?.data.filter((n) => n.type === "Geral").length})
-          </button>
+        {/* Abas */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--color-border)", marginBottom: "24px", flexShrink: 0, gap: "24px" }}>
+          {(["Turno", "Geral"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                paddingBottom: "12px", fontSize: "15px", fontWeight: 700,
+                borderBottom: `2px solid ${activeTab === tab ? "var(--color-accent)" : "transparent"}`,
+                color: activeTab === tab ? "var(--color-accent-text)" : "var(--color-text-faint)",
+                background: "none", border: "none", borderBottomWidth: "2px",
+                borderBottomStyle: "solid",
+                borderBottomColor: activeTab === tab ? "var(--color-accent)" : "transparent",
+                cursor: "pointer",
+                transition: "color 150ms ease-out, border-color 150ms ease-out",
+              }}
+            >
+              {tab === "Turno" ? <ArrowRightLeft size={17} /> : <Megaphone size={17} />}
+              {tab === "Turno" ? "Passagem de Turno" : "Avisos Gerais"} ({notices.filter((n) => n.type === tab).length})
+            </button>
+          ))}
         </div>
 
         {/* 2. GRID DE CARDS */}
         {filteredNotices.length === 0 ? (
-          <div className="flex-1 border border-dashed border-[#e4e2e3] bg-white rounded-[12px] flex flex-col items-center justify-center p-10 text-center">
-            <p className="text-[15px] font-bold text-[#041627]">
-              Tudo limpo no quadrante!
-            </p>
-            <p className="text-[13px] text-[#74777d] mt-1">
-              Nenhuma pendência ou aviso ativo registrado para este filtro.
-            </p>
+          <div style={{ flex: 1, border: "2px dashed var(--color-border)", backgroundColor: "var(--color-surface)", borderRadius: "12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "40px", textAlign: "center" }}>
+            <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--color-text)" }}>Tudo limpo no quadrante!</p>
+            <p style={{ fontSize: "13px", color: "var(--color-text-faint)", marginTop: "4px" }}>Nenhuma pendência ou aviso ativo registrado para este filtro.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(440px, 1fr))", gap: "20px", alignItems: "start" }}>
             {filteredNotices.map((notice) => (
               <div
                 key={notice.id}
-                className={`bg-white rounded-[12px] border shadow-sm p-6 flex flex-col transition-all duration-300 hover:shadow-md
-                  ${notice.type === "Turno" ? "border-violet-100 hover:border-violet-200" : "border-[#e4e2e3] hover:border-blue-200"}`}
+                ref={notice.id === highlightedNoticeId ? highlightRef : null}
+                style={{
+                  backgroundColor: "var(--color-surface)",
+                  borderRadius: "12px",
+                  border: `1px solid ${notice.id === highlightedNoticeId ? "var(--color-accent)" : notice.type === "Turno" ? "var(--color-shift-night-bg)" : "var(--color-border)"}`,
+                  boxShadow: notice.id === highlightedNoticeId ? "0 0 0 2px var(--color-accent)" : "var(--shadow-sm)",
+                  padding: "24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  transition: "box-shadow 300ms ease-out, border-color 300ms ease-out",
+                }}
               >
                 {/* Meta Dados do Cabeçalho do Card */}
-                <div className="flex justify-between items-start mb-3 gap-4">
-                  <h3 className="text-[16px] font-extrabold text-[#041627] leading-snug">
-                    {notice.title}
-                  </h3>
-                  <span
-                    className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-[4px] shrink-0 tracking-wider shadow-sm
-                    ${notice.type === "Turno" ? "bg-violet-600 text-white" : "bg-[#0058be] text-white"}`}
-                  >
-                    {notice.type === "Turno" ? "Turno" : "Aviso"}
-                  </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", gap: "12px" }}>
+                  <h3 style={{ fontSize: "16px", fontWeight: 800, color: "var(--color-text)", lineHeight: 1.3 }}>{notice.title}</h3>
+                  <span style={{
+                    fontSize: "10px", fontWeight: 900, textTransform: "uppercase", padding: "2px 8px", borderRadius: "4px", flexShrink: 0, letterSpacing: "0.06em",
+                    backgroundColor: notice.type === "Turno" ? "var(--color-shift-night)" : "var(--color-accent)",
+                    color: "white",
+                  }}>{notice.type === "Turno" ? "Turno" : "Aviso"}</span>
                 </div>
-
-                <div className="flex items-center gap-2 text-[12px] text-[#74777d] font-semibold mb-4">
-                  <User size={13} className="text-zinc-400" />
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: "var(--color-text-faint)", fontWeight: 600, marginBottom: "16px" }}>
+                  <User size={12} />
                   <span>{notice.createdByUserName}</span>
-                  <span className="text-[#e4e2e3]">•</span>
+                  <span style={{ color: "var(--color-border)" }}>•</span>
                   <span>{formatDate(notice.createdAt)}</span>
                 </div>
 
                 {/* CONTEÚDO DO EDITAL (HTML Injetado de forma Segura) */}
                 <div
-                  className="text-[14px] text-[#44474c] leading-relaxed mb-6 prose prose-sm max-w-none border-b border-[#efedef] pb-4"
+                  style={{ fontSize: "14px", color: "var(--color-text-muted)", lineHeight: 1.6, marginBottom: "20px", paddingBottom: "16px", borderBottom: "1px solid var(--color-border-subtle)" }}
                   dangerouslySetInnerHTML={{ __html: notice.content }}
+                  className="prose prose-sm max-w-none"
                 />
 
                 {/* 3. SEÇÃO DE COMENTÁRIOS (Apenas em Turnos) */}
                 {notice.type === "Turno" && (
-                  <div className="flex flex-col gap-4 mb-6 bg-[#f8fafc] p-4 rounded-[8px] border border-[#efedef]">
-                    <div className="flex items-center gap-1.5 text-[12px] font-bold text-violet-700 uppercase tracking-wide">
-                      <MessageSquare size={14} />
-                      <span>
-                        Atualizações e Notas ({notice.comments.length})
-                      </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px", backgroundColor: "var(--color-surface-dim)", padding: "14px", borderRadius: "8px", border: "1px solid var(--color-border-subtle)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", fontWeight: 700, color: "var(--color-shift-night)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      <MessageSquare size={13} />
+                      <span>Atualizações e Notas ({notice.comments.length})</span>
                     </div>
-
-                    {/* Lista Interna de Comentários */}
-                    <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "160px", overflowY: "auto" }}>
                       {notice.comments.length === 0 ? (
-                        <p className="text-[11px] font-medium text-zinc-400 italic">
-                          Nenhum comentário na linha do tempo.
-                        </p>
+                        <p style={{ fontSize: "11px", fontWeight: 500, color: "var(--color-text-faint)", fontStyle: "italic" }}>Nenhum comentário na linha do tempo.</p>
                       ) : (
                         notice.comments.map((comment) => (
-                          <div
-                            key={comment.id}
-                            className="bg-white border border-[#efedef] rounded-[6px] p-2.5 shadow-xs text-[12px]"
-                          >
-                            <div className="flex justify-between font-bold text-[#1b1c1d] text-[11px] mb-1">
-                              <span className="text-violet-600">
-                                @{comment.createdByUserName}
-                              </span>
-                              <span className="text-zinc-400">
-                                {formatDate(comment.createdAt)}
-                              </span>
+                          <div key={comment.id} style={{ backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border-subtle)", borderRadius: "6px", padding: "10px 12px", fontSize: "12px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: "11px", marginBottom: "4px" }}>
+                              <span style={{ color: "var(--color-shift-night)" }}>@{comment.createdByUserName}</span>
+                              <span style={{ color: "var(--color-text-faint)" }}>{formatDate(comment.createdAt)}</span>
                             </div>
-                            <p className="text-[#44474c] font-medium leading-relaxed">
-                              {comment.content}
-                            </p>
+                            <p style={{ color: "var(--color-text-muted)", lineHeight: 1.5 }}>{comment.content}</p>
                           </div>
                         ))
                       )}
                     </div>
-
-                    {/* Formulário de Envio de Comentários */}
-                    <form
-                      onSubmit={(e) => handleSendComment(e, notice.id)}
-                      className="flex gap-2 items-center mt-1"
-                    >
+                    <form onSubmit={(e) => handleSendComment(e, notice.id)} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       <input
                         type="text"
                         placeholder="Adicionar nota técnica..."
                         value={commentInputs[notice.id] || ""}
-                        onChange={(e) =>
-                          setCommentInputs((prev) => ({
-                            ...prev,
-                            [notice.id]: e.target.value,
-                          }))
-                        }
-                        className="flex-1 h-[34px] px-3 bg-white border border-[#c4c6cd] rounded-[4px] text-[13px] focus:outline-none focus:border-violet-500 font-medium"
+                        onChange={(e) => setCommentInputs((prev) => ({ ...prev, [notice.id]: e.target.value }))}
+                        style={{ flex: 1, height: "34px", padding: "0 12px", backgroundColor: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "6px", fontSize: "13px", color: "var(--color-text)", outline: "none" }}
                       />
                       <button
                         type="submit"
-                        disabled={
-                          isSubmittingComment[notice.id] ||
-                          !commentInputs[notice.id]?.trim()
-                        }
-                        className="h-[34px] w-[34px] rounded-[4px] bg-violet-600 text-white flex items-center justify-center hover:bg-violet-700 active:bg-violet-800 transition-colors disabled:bg-zinc-200 disabled:text-zinc-400 shrink-0 shadow-sm"
+                        aria-label="Enviar comentário"
+                        disabled={isSubmittingComment[notice.id] || !commentInputs[notice.id]?.trim()}
+                        style={{ height: "34px", width: "34px", borderRadius: "6px", backgroundColor: "var(--color-shift-night)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer", flexShrink: 0 }}
                       >
-                        <Send size={14} />
+                        <Send size={13} />
                       </button>
                     </form>
                   </div>
                 )}
 
                 {/* Botões de Ação Dinâmicos */}
-                <div className="mt-auto flex justify-end">
+                <div style={{ marginTop: "auto", display: "flex", justifyContent: "flex-end" }}>
                   <Button
                     onClick={() => handleAcknowledge(notice.id)}
-                    className={`w-full font-bold text-[13px] h-10 shadow-xs uppercase tracking-wide
-                      ${
-                        notice.type === "Turno"
-                          ? "bg-emerald-600 hover:bg-emerald-700 text-white"
-                          : "bg-white border border-[#e4e2e3] text-[#44474c] hover:bg-zinc-50"
-                      }`}
+                    style={{
+                      width: "100%", fontWeight: 700, fontSize: "13px", height: "40px", textTransform: "uppercase", letterSpacing: "0.04em",
+                      backgroundColor: notice.type === "Turno" ? "var(--color-success)" : "var(--color-surface-dim)",
+                      color: notice.type === "Turno" ? "white" : "var(--color-text-muted)",
+                      border: notice.type === "Turno" ? "none" : "1px solid var(--color-border)",
+                    }}
                   >
-                    {notice.type === "Turno"
-                      ? "✓ Resolver Pendência"
-                      : "Marcar como Ciente"}
+                    {notice.type === "Turno" ? "✓ Resolver Pendência" : "Marcar como Ciente"}
                   </Button>
                 </div>
               </div>
@@ -363,93 +359,38 @@ export default function NoticesPage() {
         )}
       </div>
 
-      {/* 4. MODAL DE CRIAÇÃO DE NOVOS AVISOS / OCORRÊNCIAS */}
+      {/* MODAL DE CRIAÇÃO — usa Modal.tsx */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setIsModalOpen(false)}
-          ></div>
-          <div className="relative w-full max-w-[550px] bg-white rounded-[12px] shadow-2xl p-8 animate-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-700"
-            >
-              <X size={20} />
-            </button>
-
-            <h2 className="text-[20px] font-bold text-[#041627] mb-1">
-              Registrar Ocorrência / Aviso
-            </h2>
-            <p className="text-[13px] text-[#74777d] mb-6">
-              Esta mensagem será publicada imediatamente no quadro operacional
-              ativo do NOC.
-            </p>
-
-            <form onSubmit={handleCreateNotice} className="flex flex-col gap-5">
-              <InputField
-                label="Título da Ocorrência"
-                id="title"
-                required
-                value={newNotice.title}
-                onChange={(e) =>
-                  setNewNotice({ ...newNotice, title: e.target.value })
-                }
-              />
-
-              <div className="flex flex-col gap-1 w-full">
-                <label className="text-[12px] font-semibold text-[#44474c] uppercase tracking-wider">
-                  Destino do Alerta
-                </label>
-                <select
-                  className="w-full h-[40px] px-3 text-[14px] text-[#1b1c1d] bg-[#fbf9fa] border border-[#c4c6cd] rounded-[4px] focus:outline-none focus:border-[#0058be]"
-                  value={newNotice.type}
-                  onChange={(e) =>
-                    setNewNotice({
-                      ...newNotice,
-                      type: e.target.value as "Geral" | "Turno",
-                    })
-                  }
-                >
-                  <option value="Turno">
-                    Passagem de Turno (Urgência Técnica)
-                  </option>
-                  <option value="Geral">Aviso Geral (📢)</option>
-                </select>
-              </div>
-
-              {/* Rich Text Editor Isolado */}
-              <div className="flex flex-col gap-1 w-full">
-                <label className="text-[12px] font-semibold text-[#44474c] uppercase tracking-wider mb-1">
-                  Conteúdo e Instruções Técnicas
-                </label>
-                <RichTextEditor
-                  content={newNotice.content}
-                  onChange={(html) =>
-                    setNewNotice({ ...newNotice, content: html })
-                  }
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-[#efedef]">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsModalOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isSavingNotice}
-                  className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-bold"
-                >
-                  {isSavingNotice ? "Publicando..." : "Publicar no Mural"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <Modal title="Registrar Ocorrência / Aviso" icon={<Megaphone size={18} />} onClose={() => setIsModalOpen(false)} size="md">
+          <p style={{ fontSize: "13px", color: "var(--color-text-faint)", marginBottom: "20px", marginTop: "-4px" }}>
+            Esta mensagem será publicada imediatamente no quadro operacional ativo do NOC.
+          </p>
+          <form onSubmit={handleCreateNotice} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <InputField label="Título da Ocorrência" id="notice-title" required value={newNotice.title}
+              onChange={(e) => setNewNotice({ ...newNotice, title: e.target.value })} />
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Destino do Alerta</label>
+              <select
+                style={{ width: "100%", height: "40px", padding: "0 12px", fontSize: "14px", color: "var(--color-text)", backgroundColor: "var(--color-surface-dim)", border: "1px solid var(--color-border)", borderRadius: "6px", outline: "none" }}
+                value={newNotice.type}
+                onChange={(e) => setNewNotice({ ...newNotice, type: e.target.value as "Geral" | "Turno" })}
+              >
+                <option value="Turno">Passagem de Turno (Urgência Técnica)</option>
+                <option value="Geral">Aviso Geral (📢)</option>
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--color-text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Conteúdo e Instruções Técnicas</label>
+              <RichTextEditor content={newNotice.content} onChange={(html) => setNewNotice({ ...newNotice, content: html })} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "8px", borderTop: "1px solid var(--color-border-subtle)", marginTop: "4px" }}>
+              <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isSavingNotice} style={{ backgroundColor: "var(--color-accent)", color: "white" }}>
+                {isSavingNotice ? "Publicando..." : "Publicar no Mural"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   );

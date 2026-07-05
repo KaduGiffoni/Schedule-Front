@@ -5,13 +5,14 @@ import { usersService, type User } from "../../users/api/usersService";
 import { holidayService, type Holiday } from "../../settings/api/holidayService";
 import type { ScheduleDay } from "../types";
 import {
-  TEAM_MAP,
   MONTHS_PT,
   normalizeShiftName,
   parseShiftDay,
   parseDateParts,
   getShiftStyle,
+  getTeamName,
 } from "../../../lib/schedule-utils";
+import { useLettersStore } from "../../letters/store/lettersStore";
 
 // ── Skeleton para o painel lateral ───────────────────────────────────────────
 const SidebarSkeleton = () => (
@@ -55,6 +56,10 @@ export const RightSidebarContent = ({
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [clickedHolidayId, setClickedHolidayId] = useState<number | null>(null);
+
+  // Letras/equipes dinâmicas via /api/Letters
+  const { letters, fetchLetters } = useLettersStore();
+  useEffect(() => { fetchLetters(); }, [fetchLetters]);
 
   const today = new Date();
   const formattedToday = `${today.getDate()} ${MONTHS_PT[today.getMonth()].slice(0, 3)}`;
@@ -107,7 +112,7 @@ export const RightSidebarContent = ({
     );
     if (!activeShift) return { letter: "", users: [] };
     return {
-      letter: TEAM_MAP[activeShift.letterId] ?? "?",
+      letter: getTeamName(activeShift.letterId, letters),
       users: users.filter((u) => Number(u.letterId) === Number(activeShift.letterId)),
     };
   };

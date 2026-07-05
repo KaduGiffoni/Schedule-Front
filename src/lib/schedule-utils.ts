@@ -3,8 +3,13 @@
  * Constantes e helpers compartilhados para o sistema de escalas.
  * Centraliza dados que estavam duplicados em CalendarGrid e RightSidebarContent.
  */
+import type { Letter } from '../features/letters/api/lettersService';
 
 // ── Mapa de IDs de letra para nome da equipe ─────────────────────────────────
+/**
+ * @deprecated Use `getTeamName(letterId, letters)` com o array dinâmico do lettersStore.
+ * Este mapa estático só existe como fallback de emergência.
+ */
 export const TEAM_MAP: Record<number, string> = {
   1: "A",
   2: "B",
@@ -99,4 +104,17 @@ export function parseDateParts(dateStr: string): { year: number; month: number; 
 export function getShiftStyle(shiftName: string): ShiftStyle {
   const normalized = normalizeShiftName(shiftName);
   return SHIFT_STYLES[normalized] ?? SHIFT_STYLES["Folga"];
+}
+
+/**
+ * Retorna o nome da equipe a partir do array dinâmico de letras (fonte: GET /api/Letters).
+ * Prefira este helper a TEAM_MAP para garantir dados atualizados do backend.
+ *
+ * @param letterId  - ID da letra/equipe
+ * @param letters   - Array de letras vindas do lettersStore
+ * @returns         - Nome da equipe (ex: "A") ou "?" se não encontrado
+ */
+export function getTeamName(letterId: number, letters: Letter[]): string {
+  const found = letters.find((l) => l.id === letterId);
+  return found?.name ?? TEAM_MAP[letterId] ?? "?";
 }

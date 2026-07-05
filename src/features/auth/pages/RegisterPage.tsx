@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
 import { authService } from "../api/authService";
 import type { LoginRequest } from "../types";
 import { InputField } from "../../../components/ui/InputField";
@@ -25,101 +25,173 @@ export default function RegisterPage() {
     try {
       const requestData: LoginRequest = { email, password };
       await authService.register(requestData);
-
       setSuccessMsg("Conta criada com sucesso! Redirecionando...");
-      setTimeout(() => {
-        navigate("/login");
-      }, 2000);
-    } catch (error: any) {
-      setErrorMsg(
-        error.message ||
-          "Erro ao tentar registrar. Verifique os dados e tente novamente.",
-      );
+      setTimeout(() => { navigate("/login"); }, 2000);
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      setErrorMsg(err.message || "Erro ao tentar registrar. Verifique os dados e tente novamente.");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#fbf9fa] p-4 font-sans">
-      <div className="bg-white w-full max-w-[480px] rounded-[4px] shadow-[0_2px_12px_rgba(0,0,0,0.04)] border-l-4 border-l-[#0058be] p-10">
-        <div className="mb-8">
-          <h1 className="text-[24px] font-bold text-[#041627] mb-2">
-            Criar Nova Conta
-          </h1>
-          <p className="text-[14px] text-[#44474c] leading-relaxed">
-            Insira as credenciais para registrar um novo operador no sistema.
-          </p>
-        </div>
+    <div
+      style={{
+        minHeight: "100dvh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "var(--color-bg)",
+        padding: "16px",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      {/* Background sutil */}
+      <div
+        style={{
+          position: "fixed", inset: 0, pointerEvents: "none",
+          backgroundImage: "radial-gradient(var(--color-border) 1px, transparent 1px)",
+          backgroundSize: "28px 28px",
+          opacity: 0.4,
+        }}
+      />
 
-        {errorMsg && (
-          <div className="mb-6 p-3 bg-[#ffdad6] text-[#ba1a1a] text-sm rounded-[4px] font-medium">
-            {errorMsg}
-          </div>
-        )}
-        {successMsg && (
-          <div className="mb-6 p-3 bg-[#f0fdf4] text-[#15803d] text-sm rounded-[4px] font-medium border border-[#bbf7d0]">
-            {successMsg}
-          </div>
-        )}
-
-        <form onSubmit={handleRegister} className="flex flex-col gap-2">
-          {/* 👇 Agora passamos a label e o ícone perfeitamente! */}
-          <InputField
-            label="E-mail"
-            type="email"
-            placeholder="exemplo@shifthub.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            icon={Mail}
-            required
-          />
-
-          <div>
-            {/* 👇 Usamos o rightElement para colocar o botão de mostrar senha! */}
-            <InputField
-              label="Senha"
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              icon={Lock}
-              required
-              rightElement={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-[#74777d] hover:text-[#041627] transition-colors flex items-center justify-center"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              }
-            />
-            <p className="text-[11px] text-[#74777d] italic -mt-2">
-              Mínimo de 8 caracteres, incluindo números e símbolos.
+      <div
+        style={{
+          position: "relative",
+          backgroundColor: "var(--color-surface)",
+          width: "100%",
+          maxWidth: "440px",
+          borderRadius: "14px",
+          border: "1px solid var(--color-border)",
+          borderLeft: `4px solid var(--color-accent)`,
+          boxShadow: "var(--shadow-lg)",
+          overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: "36px 36px 32px" }}>
+          <div style={{ marginBottom: "28px" }}>
+            <h1 style={{ fontSize: "22px", fontWeight: 700, color: "var(--color-text)", marginBottom: "6px" }}>
+              Criar Nova Conta
+            </h1>
+            <p style={{ fontSize: "14px", color: "var(--color-text-muted)", lineHeight: 1.5 }}>
+              Insira as credenciais para registrar um novo operador no sistema.
             </p>
           </div>
 
-          <div className="mt-4">
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-[#0058be] hover:bg-[#004a9e] text-white py-3 rounded-[4px] font-medium flex items-center justify-center gap-2 transition-colors"
+          {errorMsg && (
+            <div
+              role="alert"
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                marginBottom: "20px", padding: "10px 14px",
+                backgroundColor: "var(--color-error-subtle)",
+                border: "1px solid var(--color-error)",
+                color: "var(--color-error)",
+                borderRadius: "8px",
+                fontSize: "13px", fontWeight: 500,
+              }}
             >
-              {isLoading ? "A processar..." : "Cadastrar"}
-              {!isLoading && <ArrowRight size={18} />}
-            </Button>
-          </div>
-        </form>
+              <AlertCircle size={14} />
+              {errorMsg}
+            </div>
+          )}
 
-        <hr className="my-6 border-[#e4e2e3]" />
+          {successMsg && (
+            <div
+              role="status"
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                marginBottom: "20px", padding: "10px 14px",
+                backgroundColor: "var(--color-success-subtle)",
+                border: "1px solid var(--color-success)",
+                color: "var(--color-success)",
+                borderRadius: "8px",
+                fontSize: "13px", fontWeight: 500,
+              }}
+            >
+              <CheckCircle2 size={14} />
+              {successMsg}
+            </div>
+          )}
 
-        <div className="text-center">
+          <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <InputField
+              label="E-mail"
+              id="register-email"
+              type="email"
+              placeholder="operador@empresa.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              icon={Mail}
+              required
+            />
+
+            <div>
+              <InputField
+                label="Senha"
+                id="register-password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                icon={Lock}
+                required
+                rightElement={
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      color: "var(--color-text-faint)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "none", border: "none", cursor: "pointer",
+                      transition: "color 120ms ease-out",
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text)"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)"; }}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                }
+              />
+              <p style={{ fontSize: "11px", color: "var(--color-text-faint)", fontStyle: "italic", marginTop: "4px" }}>
+                Mínimo de 8 caracteres, incluindo números e símbolos.
+              </p>
+            </div>
+
+            <div style={{ marginTop: "8px" }}>
+              <Button type="submit" disabled={isLoading} isLoading={isLoading}>
+                {isLoading ? "Processando..." : <><span>Cadastrar</span><ArrowRight size={16} /></>}
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            padding: "16px 36px",
+            borderTop: "1px solid var(--color-border-subtle)",
+            backgroundColor: "var(--color-surface-dim)",
+            textAlign: "center",
+          }}
+        >
           <Link
-            to="/login"
-            className="inline-flex items-center gap-2 text-[12px] font-bold text-[#44474c] hover:text-[#0058be] uppercase tracking-wider transition-colors"
+            to="/"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              fontSize: "12px", fontWeight: 700,
+              color: "var(--color-text-muted)",
+              textTransform: "uppercase", letterSpacing: "0.05em",
+              textDecoration: "none",
+              transition: "color 120ms ease-out",
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-accent-text)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)"; }}
           >
-            <ArrowRight size={16} /> JÁ POSSUI ACESSO? FAZER LOGIN
+            <ArrowRight size={14} /> Já possui acesso? Fazer Login
           </Link>
         </div>
       </div>

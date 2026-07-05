@@ -100,15 +100,18 @@
    TOKENS DE COR — DARK MODE
    ══════════════════════════════════════════════════════════════ */
 .dark {
-  /* Backgrounds */
+  /* Backgrounds — maior amplitude para distinção de camadas no dark */
   --color-bg:              oklch(13%   0.010 248);   /* #0d1117 */
-  --color-surface:         oklch(16%   0.010 248);   /* #161b22 */
-  --color-surface-raised:  oklch(19%   0.010 248);   /* hover */
-  --color-surface-dim:     oklch(12%   0.008 248);   /* mais fundo */
+  --color-surface:         oklch(19%   0.010 248);   /* células do calendário, cards — mais claro */
+  --color-surface-raised:  oklch(22%   0.010 248);   /* hover */
+  --color-surface-dim:     oklch(10%   0.008 248);   /* container do calendário — mais escuro */
 
-  /* Borders */
-  --color-border:          oklch(27%   0.010 248);   /* #30363d */
-  --color-border-subtle:   oklch(22%   0.008 248);   /* internal dividers */
+  /* Borders — mais visíveis para separar cards de fundo escuro */
+  --color-border:          oklch(30%   0.010 248);   /* #30363d — reforçado */
+  --color-border-subtle:   oklch(25%   0.008 248);   /* divisões internas */
+
+  /* Shadow adicional para cards em dark (sombra é mais eficaz que diferença de cinza) */
+  --shadow-card:   0 1px 3px oklch(5% 0 0 / 40%), 0 0 0 1px oklch(100% 0 0 / 5%);
 
   /* Text */
   --color-text:            oklch(93%   0.005 248);   /* #e6edf3 */

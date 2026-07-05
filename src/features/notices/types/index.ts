@@ -10,16 +10,11 @@ export interface Notice {
   title: string;
   content: string;
   type: "Geral" | "Turno";
-  status: "Ativo" | "Encerrado";
+  /** Backend usa apenas "Ativo" | "Resolvido" — nunca "Encerrado" */
+  status: "Ativo" | "Resolvido";
   createdAt: string;
   createdByUserName: string;
   comments: Comment[];
-}
-
-export interface NoticeBoardResponse {
-  needsSync: boolean;
-  currentYear: number;
-  data: Notice[];
 }
 
 export interface CreateNoticeDTO {

@@ -15,5 +15,8 @@ export interface UserProfile {
   user: string;
   letterId: number;
   completeName: string;
+  surname?: string;
   registration: string;
-}
+  /** Role do usuário: "Admin" | "Manager" | "Standard" | "Viewer" */
+  role?: string;
+}

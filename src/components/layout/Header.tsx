@@ -5,16 +5,44 @@ import {
   User as UserIcon,
   LogOut,
   Settings,
-  Megaphone,
-  ArrowRightLeft,
   Sun,
   Moon,
+  CheckCheck,
+  ArrowRightLeft,
+  Megaphone,
+  CalendarOff,
+  Info,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../features/auth/store/authStore";
 import { useTheme } from "../../lib/theme";
-import { noticesService } from "../../features/notices/api/noticesService";
-import type { Notice } from "../../features/notices/types";
+import { notificationsService } from "../../features/notifications/api/notificationsService";
+import type { Notification } from "../../features/notifications/types";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Formata uma data ISO em tempo relativo curto (ex: "há 5m", "há 2h") */
+function timeAgo(isoDate: string): string {
+  const diff = Date.now() - new Date(isoDate).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "agora";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.floor(hrs / 24)}d`;
+}
+
+/** Ícone baseado no type da notificação */
+function NotifIcon({ type }: { type: string }) {
+  const lower = type.toLowerCase();
+  if (lower.includes("shift") || lower.includes("handover"))
+    return <ArrowRightLeft size={13} strokeWidth={2} />;
+  if (lower.includes("absence") || lower.includes("ausencia"))
+    return <CalendarOff size={13} strokeWidth={2} />;
+  if (lower.includes("notice") || lower.includes("aviso"))
+    return <Megaphone size={13} strokeWidth={2} />;
+  return <Info size={13} strokeWidth={2} />;
+}
 
 // ── Subcomponente: Dropdown com animação CSS ──────────────────────────────────
 interface DropdownProps {
@@ -44,15 +72,15 @@ const Dropdown = ({ isOpen, children, className = "" }: DropdownProps) => (
 export const Header = () => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [notices, setNotices] = useState<Notice[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isMarkingAll, setIsMarkingAll] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const { theme, toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark } = useTheme();
 
-  // Dados do usuário via AuthStore (DashboardLayout já faz o fetch)
   const userProfile = useAuthStore((state) => state.userProfile);
   const email = useAuthStore((state) => state.email);
 
@@ -62,23 +90,69 @@ export const Header = () => {
     .charAt(0)
     .toUpperCase();
 
-  // Fetch de notificações (independente dos dados de usuário)
-  useEffect(() => {
-    const fetchNotices = async () => {
-      try {
-        const board = await noticesService.getMyBoard().catch(() => null);
-        setNotices(board?.data ?? []);
-      } catch {
-        setNotices([]);
-      }
-    };
+  // Contagem de não-lidas derivada do state local
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
-    fetchNotices();
-    const interval = setInterval(fetchNotices, 120_000);
-    return () => clearInterval(interval);
+  // ── Fetch de notificações ────────────────────────────────────────────────────
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const data = await notificationsService.getNotifications().catch(() => null);
+      setNotifications(data ?? []);
+    } catch {
+      // Silencia erros de rede — o sino fica sem badge
+    }
   }, []);
 
-  // Fecha menus ao clicar fora
+  useEffect(() => {
+    fetchNotifications();
+    // Polling a cada 60s (mais conservador que o padrão anterior de 120s)
+    const interval = setInterval(fetchNotifications, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  // ── Marcar uma notificação como lida ────────────────────────────────────────
+  const handleMarkRead = useCallback(
+    async (notif: Notification) => {
+      if (!notif.isRead) {
+        // Optimistic update — atualiza localmente antes da resposta
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n))
+        );
+        notificationsService.markAsRead(notif.id).catch(() => {
+          // Se falhar, reverte
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === notif.id ? { ...n, isRead: false } : n))
+          );
+        });
+      }
+
+      setIsNotifOpen(false);
+
+      // Navegar para o aviso relacionado (se houver)
+      if (notif.referenceNoticeId !== null) {
+        navigate(`/comunicacao?noticeId=${notif.referenceNoticeId}`);
+      }
+    },
+    [navigate]
+  );
+
+  // ── Marcar todas como lidas ──────────────────────────────────────────────────
+  const handleMarkAllRead = useCallback(async () => {
+    if (unreadCount === 0 || isMarkingAll) return;
+    setIsMarkingAll(true);
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await notificationsService.markAllRead();
+    } catch {
+      // Reverte em caso de erro
+      await fetchNotifications();
+    } finally {
+      setIsMarkingAll(false);
+    }
+  }, [unreadCount, isMarkingAll, fetchNotifications]);
+
+  // ── Fecha menus ao clicar fora ──────────────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -200,20 +274,23 @@ export const Header = () => {
             }}
           >
             <Bell size={17} strokeWidth={1.8} />
-            {/* Badge estático — sem pulse (Emil: não animar elementos de alta frequência) */}
-            {notices.length > 0 && (
+            {/* Badge de não-lidas */}
+            {unreadCount > 0 && (
               <span
-                className="absolute top-1.5 right-1.5 w-[7px] h-[7px] rounded-full border-2"
+                className="absolute top-1 right-1 min-w-[16px] h-[16px] rounded-full flex items-center justify-center text-[9px] font-bold border-2 px-0.5"
                 style={{
                   backgroundColor: "var(--color-error)",
                   borderColor: "var(--color-header-bg)",
+                  color: "white",
                 }}
-              />
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
             )}
           </button>
 
-          {/* Dropdown de notificações */}
-          <Dropdown isOpen={isNotifOpen} className="w-[300px]">
+          {/* ── Dropdown de notificações ─────────────────────────────── */}
+          <Dropdown isOpen={isNotifOpen} className="w-[340px]">
             <div
               className="rounded-[10px] overflow-hidden"
               style={{
@@ -227,78 +304,127 @@ export const Header = () => {
                 className="flex items-center justify-between px-4 py-3"
                 style={{ borderBottom: "1px solid var(--color-border-subtle)" }}
               >
-                <span
-                  className="text-[12px] font-semibold uppercase tracking-wider"
-                  style={{ color: "var(--color-text-muted)" }}
-                >
-                  Alertas Operacionais
-                </span>
-                {notices.length > 0 && (
+                <div className="flex items-center gap-2">
                   <span
-                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-[4px]"
-                    style={{
-                      backgroundColor: "var(--color-accent-dim)",
-                      color: "var(--color-accent-text)",
-                    }}
+                    className="text-[12px] font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--color-text-muted)" }}
                   >
-                    {notices.length}
+                    Notificações
                   </span>
+                  {unreadCount > 0 && (
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-[4px]"
+                      style={{
+                        backgroundColor: "var(--color-error)",
+                        color: "white",
+                      }}
+                    >
+                      {unreadCount} nova{unreadCount > 1 ? "s" : ""}
+                    </span>
+                  )}
+                </div>
+
+                {/* Botão "Marcar todas como lidas" */}
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllRead}
+                    disabled={isMarkingAll}
+                    className="flex items-center gap-1 text-[11px] font-semibold rounded-[4px] px-2 py-1 transition-colors"
+                    style={{
+                      color: "var(--color-accent-text)",
+                      backgroundColor: "var(--color-accent-dim)",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-subtle)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-accent-dim)";
+                    }}
+                    title="Marcar todas como lidas"
+                  >
+                    <CheckCheck size={12} strokeWidth={2.5} />
+                    {isMarkingAll ? "..." : "Todas lidas"}
+                  </button>
                 )}
               </div>
 
               {/* Lista de notificações */}
-              <div className="max-h-[260px] overflow-y-auto divide-y" style={{ "--tw-divide-color": "var(--color-border-subtle)" } as React.CSSProperties}>
-                {notices.length === 0 ? (
-                  <div className="p-5 text-center">
+              <div className="max-h-[320px] overflow-y-auto divide-y" style={{ "--tw-divide-color": "var(--color-border-subtle)" } as React.CSSProperties}>
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center flex flex-col items-center gap-2">
+                    <Bell size={22} style={{ color: "var(--color-text-faint)" }} strokeWidth={1.2} />
                     <p className="text-[13px]" style={{ color: "var(--color-text-faint)" }}>
-                      Sem pendências no momento.
+                      Tudo em dia — sem notificações.
                     </p>
                   </div>
                 ) : (
-                  notices.map((n) => (
-                    <Link
+                  notifications.slice(0, 15).map((n) => (
+                    <button
                       key={n.id}
-                      to="/comunicacao"
-                      onClick={() => setIsNotifOpen(false)}
-                      className="flex gap-3 p-3.5 transition-colors duration-100"
-                      style={{ display: "flex" }}
+                      onClick={() => handleMarkRead(n)}
+                      className="w-full flex gap-3 px-4 py-3 text-left transition-colors duration-100 relative"
+                      style={{
+                        backgroundColor: n.isRead ? "transparent" : "var(--color-accent-dim)",
+                      }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
+                        (e.currentTarget as HTMLElement).style.backgroundColor = n.isRead
+                          ? "var(--color-surface-raised)"
+                          : "var(--color-accent-subtle)";
                       }}
                       onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+                        (e.currentTarget as HTMLElement).style.backgroundColor = n.isRead
+                          ? "transparent"
+                          : "var(--color-accent-dim)";
                       }}
                     >
+                      {/* Indicador de não-lida */}
+                      {!n.isRead && (
+                        <span
+                          className="absolute left-1.5 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full"
+                          style={{ backgroundColor: "var(--color-accent)" }}
+                        />
+                      )}
+
+                      {/* Ícone de tipo */}
                       <div
                         className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
                         style={{
-                          backgroundColor: n.type === "Turno"
-                            ? "var(--color-shift-night-bg)"
-                            : "var(--color-accent-subtle)",
-                          color: n.type === "Turno"
-                            ? "var(--color-shift-night)"
-                            : "var(--color-accent)",
+                          backgroundColor: "var(--color-surface-dim)",
+                          color: "var(--color-text-muted)",
+                          border: "1px solid var(--color-border-subtle)",
                         }}
                       >
-                        {n.type === "Turno"
-                          ? <ArrowRightLeft size={13} strokeWidth={2} />
-                          : <Megaphone size={13} strokeWidth={2} />
-                        }
+                        <NotifIcon type={n.type} />
                       </div>
+
+                      {/* Conteúdo */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold truncate" style={{ color: "var(--color-text)" }}>
-                          {n.title}
+                        <p
+                          className={`text-[12.5px] leading-snug line-clamp-2 ${!n.isRead ? "font-semibold" : "font-medium"}`}
+                          style={{ color: "var(--color-text)" }}
+                        >
+                          {n.message}
                         </p>
-                        <p className="text-[11px] mt-0.5 truncate" style={{ color: "var(--color-text-faint)" }}>
-                          @{n.createdByUserName}
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className="text-[11px]" style={{ color: "var(--color-text-faint)" }}>
+                            {timeAgo(n.createdAt)}
+                          </span>
+                          {n.referenceNoticeId !== null && (
+                            <>
+                              <span style={{ color: "var(--color-border)" }}>·</span>
+                              <span className="text-[11px] font-medium" style={{ color: "var(--color-accent-text)" }}>
+                                Ver aviso
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </Link>
+                    </button>
                   ))
                 )}
               </div>
 
-              {/* Footer do dropdown */}
+              {/* Footer */}
               <Link
                 to="/comunicacao"
                 onClick={() => setIsNotifOpen(false)}
@@ -315,7 +441,7 @@ export const Header = () => {
                   (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-dim)";
                 }}
               >
-                Ver painel completo
+                Ver painel de comunicação
               </Link>
             </div>
           </Dropdown>

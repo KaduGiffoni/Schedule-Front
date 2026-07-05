@@ -47,18 +47,7 @@ export const usersService = {
     return response.data;
   },
 
-  deleteUser: async (email: string): Promise<any> => {
-    try {
-      // O Axios pega no "params" e constrói o link perfeitamente codificado
-      const response = await api.delete("/Users/delete-user", {
-        params: { email: email },
-      });
-
-      // Se devolver 204, o response.data é vazio, logo enviamos um sucesso manual
-      return response.data || { success: true };
-    } catch (error) {
-      console.error("Erro no serviço ao deletar usuário:", error);
-      throw error;
-    }
-  },
+  // TODO: Reativar quando o backend expor o endpoint de exclusão de usuários.
+  // O endpoint DELETE /api/Users/{email} (ou similar) ainda não existe no Schedule-BackEnd.
+  // deleteUser: async (email: string): Promise<any> => { ... }
 };
