@@ -52,6 +52,7 @@
   --color-warning:         oklch(75%   0.18  75);    /* amber */
   --color-warning-subtle:  oklch(97%   0.05  85);    /* amber bg */
   --color-success:         oklch(55%   0.18  150);   /* green */
+  --color-success-hover:   oklch(48%   0.18  150); 
   --color-success-subtle:  oklch(95%   0.04  150);
 
   /* Shift Colors */

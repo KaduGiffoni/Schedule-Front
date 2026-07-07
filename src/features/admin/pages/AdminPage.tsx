@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   ShieldCheck, Building2, Layers, Tags, Clock, GitBranch,
-  CalendarCog, Trash2, UserCog, X, Plus, Loader2, AlertCircle,
+  CalendarCog, Trash2, UserCog, Plus, Loader2, AlertCircle,
   CheckCircle2, RefreshCw, ChevronRight, Lock,
 } from "lucide-react";
 import axios from "axios";
@@ -10,6 +10,8 @@ import { adminService } from "../api/adminService";
 import { usersService, type User } from "../../users/api/usersService";
 import { Button } from "../../../components/ui/Button";
 import { InputField } from "../../../components/ui/InputField";
+import { Modal } from "../../../components/ui/Modal";
+import { useToastStore } from "../../../lib/toastStore";
 import type {
   Company, CreateCompanyDTO,
   Sector, CreateSectorDTO,
@@ -64,110 +66,56 @@ const TABS: TabConfig[] = [
   { id: "promote",   label: "Promover Usuário",   icon: <UserCog size={16} /> },
 ];
 
-// ── Componente de Feedback ─────────────────────────────────────────────────────
-const Feedback = ({
-  type, message, onClose,
-}: {
-  type: "error" | "success";
-  message: string;
-  onClose?: () => void;
-}) => (
-  <div
-    className={`flex items-start gap-2 px-4 py-3 rounded-[8px] text-[13px] font-medium mb-4 ${
-      type === "error"
-        ? "bg-red-50 border border-red-200 text-red-700"
-        : "bg-emerald-50 border border-emerald-200 text-emerald-700"
-    }`}
-  >
-    {type === "error"
-      ? <AlertCircle size={15} className="mt-0.5 shrink-0" />
-      : <CheckCircle2 size={15} className="mt-0.5 shrink-0" />}
-    <span className="flex-1">{message}</span>
-    {onClose && (
-      <button onClick={onClose} className="ml-2 opacity-60 hover:opacity-100">
-        <X size={13} />
-      </button>
-    )}
-  </div>
-);
-
-// ── Modal Wrapper ─────────────────────────────────────────────────────────────
-const Modal = ({
-  title, icon, onClose, children,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  onClose: () => void;
-  children: React.ReactNode;
-}) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-    <div
-      className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm"
-      onClick={onClose}
-    />
-    <div className="relative w-full max-w-[480px] bg-white rounded-[14px] shadow-2xl p-8 max-h-[90vh] overflow-y-auto">
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-700 transition-colors"
-      >
-        <X size={20} />
-      </button>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-9 h-9 rounded-xl bg-[#eff6ff] flex items-center justify-center text-[#1d4ed8]">
-          {icon}
-        </div>
-        <h2 className="text-[18px] font-bold text-[#041627]">{title}</h2>
-      </div>
-      {children}
-    </div>
-  </div>
-);
-
 // ── Tabela Genérica ────────────────────────────────────────────────────────────
 const SectionTable = ({
-  headers, rows, isLoading, emptyMsg,
+  headers, rows, isLoading, emptyMsg, emptyIcon
 }: {
   headers: string[];
   rows: React.ReactNode[][];
   isLoading: boolean;
   emptyMsg: string;
+  emptyIcon?: React.ReactNode;
 }) => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16 gap-2">
-        <Loader2 className="w-6 h-6 text-[#0058be] animate-spin" />
-        <span className="text-[13px] text-[#74777d]">Carregando...</span>
+        <Loader2 className="w-6 h-6 text-[var(--color-accent)] animate-spin" />
+        <span className="text-[13px] text-[var(--color-text-faint)]">Carregando...</span>
       </div>
     );
   }
   if (rows.length === 0) {
     return (
-      <div className="border border-dashed border-[#e4e2e3] rounded-[10px] flex items-center justify-center py-12">
-        <p className="text-[13px] text-[#74777d]">{emptyMsg}</p>
+      <div className="border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] rounded-[12px] flex flex-col items-center justify-center p-10 text-center">
+        <div className="w-16 h-16 bg-[var(--color-surface-dim)] text-[var(--color-text-faint)] rounded-full flex items-center justify-center mb-4">
+          {emptyIcon}
+        </div>
+        <p className="text-[15px] font-bold text-[var(--color-text)]">Nenhum registro encontrado</p>
+        <p className="text-[13px] text-[var(--color-text-muted)] mt-1">{emptyMsg}</p>
       </div>
     );
   }
   return (
-    <div className="bg-white rounded-[10px] border border-[#e4e2e3] shadow-sm overflow-hidden">
+    <div className="bg-[var(--color-surface)] rounded-[10px] border border-[var(--color-border)] shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-[#f8fafc] border-b border-[#e4e2e3]">
+            <tr className="bg-[var(--color-surface-dim)] border-b border-[var(--color-border)]">
               {headers.map((h) => (
                 <th
                   key={h}
-                  className="px-5 py-3 text-[11px] font-bold text-[#74777d] uppercase tracking-wider whitespace-nowrap"
+                  className="px-5 py-3 text-[11px] font-bold text-[var(--color-text-faint)] uppercase tracking-wider whitespace-nowrap"
                 >
                   {h}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#efedef]">
+          <tbody className="divide-y divide-[var(--color-border-subtle)]">
             {rows.map((cells, ri) => (
-              <tr key={ri} className="hover:bg-[#fbf9fa] transition-colors">
+              <tr key={ri} className="hover:bg-[var(--color-surface-raised)] transition-colors">
                 {cells.map((cell, ci) => (
-                  <td key={ci} className="px-5 py-3.5 text-[13px] text-[#44474c]">
+                  <td key={ci} className="px-5 py-3.5 text-[13px] text-[var(--color-text-muted)]">
                     {cell}
                   </td>
                 ))}
@@ -176,9 +124,9 @@ const SectionTable = ({
           </tbody>
         </table>
       </div>
-      <div className="px-5 py-2.5 border-t border-[#e4e2e3] bg-[#f8fafc]">
-        <span className="text-[11px] text-[#74777d]">
-          <span className="font-bold text-[#1b1c1d]">{rows.length}</span> registro{rows.length !== 1 ? "s" : ""}
+      <div className="px-5 py-2.5 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)]">
+        <span className="text-[11px] text-[var(--color-text-faint)]">
+          <span className="font-bold text-[var(--color-text)]">{rows.length}</span> registro{rows.length !== 1 ? "s" : ""}
         </span>
       </div>
     </div>
@@ -195,12 +143,12 @@ export default function AdminPage() {
   // Acesso negado para não-Admin
   if (!isAdmin) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 bg-[#fbf9fa]">
-        <div className="w-16 h-16 rounded-2xl bg-red-50 flex items-center justify-center">
-          <Lock size={28} className="text-red-400" />
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 bg-[var(--color-bg)]">
+        <div className="w-16 h-16 rounded-2xl bg-[var(--color-error-subtle)] flex items-center justify-center">
+          <Lock size={28} className="text-[var(--color-error)]" />
         </div>
-        <h2 className="text-[20px] font-bold text-[#041627]">Acesso Restrito</h2>
-        <p className="text-[14px] text-[#74777d] text-center max-w-sm">
+        <h2 className="text-[20px] font-bold text-[var(--color-text)]">Acesso Restrito</h2>
+        <p className="text-[14px] text-[var(--color-text-faint)] text-center max-w-sm">
           Esta área é exclusiva para administradores do sistema.
           Contate um Admin caso precise de acesso.
         </p>
@@ -209,21 +157,21 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#fbf9fa]">
+    <div className="flex h-full overflow-hidden bg-[var(--color-bg)] font-sans">
       {/* ── Sidebar de navegação interna ──────────────────────────────────── */}
       <nav
-        className="w-[220px] shrink-0 flex flex-col border-r bg-white"
+        className="w-[220px] shrink-0 flex flex-col border-r bg-[var(--color-surface)]"
         style={{ borderColor: "var(--color-border)" }}
       >
         {/* Header */}
         <div className="px-5 py-5 border-b" style={{ borderColor: "var(--color-border)" }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#1d4ed8] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-[var(--color-accent-hover)] flex items-center justify-center">
               <ShieldCheck size={16} className="text-white" />
             </div>
             <div>
-              <p className="text-[13px] font-bold text-[#041627] leading-none">Administração</p>
-              <p className="text-[10px] text-[#74777d] mt-0.5">Painel de controle</p>
+              <p className="text-[13px] font-bold text-[var(--color-text)] leading-none">Administração</p>
+              <p className="text-[10px] text-[var(--color-text-faint)] mt-0.5">Painel de controle</p>
             </div>
           </div>
         </div>
@@ -236,16 +184,16 @@ export default function AdminPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-semibold transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-semibold transition-colors hover:bg-[var(--color-surface-dim)]"
                 style={{
                   backgroundColor: isActive
-                    ? tab.danger ? "rgba(239,68,68,0.08)" : "var(--color-accent-dim)"
+                    ? tab.danger ? "var(--color-error-subtle)" : "var(--color-accent-subtle)"
                     : "transparent",
                   color: isActive
-                    ? tab.danger ? "#dc2626" : "var(--color-accent-text)"
-                    : tab.danger ? "#ef4444" : "var(--color-text-muted)",
+                    ? tab.danger ? "var(--color-error)" : "var(--color-accent-text)"
+                    : tab.danger ? "var(--color-error)" : "var(--color-text-muted)",
                   borderRight: isActive
-                    ? `2px solid ${tab.danger ? "#dc2626" : "var(--color-accent)"}`
+                    ? `2px solid ${tab.danger ? "var(--color-error)" : "var(--color-accent)"}`
                     : "2px solid transparent",
                 }}
               >
@@ -277,10 +225,10 @@ export default function AdminPage() {
 // ABA: EMPRESAS
 // ══════════════════════════════════════════════════════════════════════════════
 function CompaniesTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [items, setItems] = useState<Company[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<CreateCompanyDTO>({ name: "", isOutsource: false });
 
@@ -293,45 +241,41 @@ function CompaniesTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
-    if (!form.name.trim()) { setFeedback({ type: "error", msg: "Nome é obrigatório." }); return; }
+    if (!form.name.trim()) { showToast("Nome é obrigatório.", "error"); return; }
     setIsSaving(true);
     try {
       await adminService.createCompany(form);
-      setFeedback({ type: "success", msg: "Empresa criada com sucesso!" });
+      showToast("Empresa criada com sucesso!", "success");
       setForm({ name: "", isOutsource: false });
       setIsOpen(false);
       load();
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao criar empresa.") });
+      showToast(apiError(err, "Erro ao criar empresa."), "error");
     } finally { setIsSaving(false); }
   };
 
   return (
     <Section
       title="Empresas"
-      icon={<Building2 size={20} className="text-[#0058be]" />}
+      icon={<Building2 size={20} className="text-[var(--color-accent)]" />}
       description="Cadastre empresas cliente e terceirizadas."
-      onAdd={() => { setFeedback(null); setIsOpen(true); }}
+      onAdd={() => { setIsOpen(true); }}
     >
-      {feedback && (
-        <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />
-      )}
       <SectionTable
         isLoading={isLoading}
-        emptyMsg="Nenhuma empresa cadastrada."
+        emptyMsg="Adicione uma empresa para começar."
+        emptyIcon={<Building2 size={32} />}
         headers={["#", "Nome", "Tipo"]}
         rows={items.map((c) => [
-          <span className="font-mono text-[12px] text-[#74777d]">#{c.id}</span>,
-          <span className="font-semibold text-[#1b1c1d]">{c.name}</span>,
-          <span className={`px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase ${c.isOutsource ? "bg-violet-100 text-violet-700" : "bg-blue-100 text-blue-700"}`}>
+          <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{c.id}</span>,
+          <span className="font-semibold text-[var(--color-text)]">{c.name}</span>,
+          <span className={`px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase ${c.isOutsource ? "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]" : "bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]"}`}>
             {c.isOutsource ? "Terceirizada" : "Própria"}
           </span>,
         ])}
       />
       {isOpen && (
-        <Modal title="Nova Empresa" icon={<Building2 size={18} />} onClose={() => setIsOpen(false)}>
-          {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
+        <Modal title="Nova Empresa" icon={<Building2 size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <InputField
               label="Nome da empresa" id="co-name" type="text" required
@@ -345,7 +289,7 @@ function CompaniesTab() {
                 checked={form.isOutsource}
                 onChange={(e) => setForm({ ...form, isOutsource: e.target.checked })}
               />
-              <label htmlFor="co-outsource" className="text-[13px] font-medium text-[#44474c]">
+              <label htmlFor="co-outsource" className="text-[13px] font-medium text-[var(--color-text-muted)]">
                 Empresa terceirizada
               </label>
             </div>
@@ -361,12 +305,12 @@ function CompaniesTab() {
 // ABA: SETORES
 // ══════════════════════════════════════════════════════════════════════════════
 function SectorsTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [items, setItems] = useState<Sector[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<CreateSectorDTO>({ name: "", companyId: 0, defaultShiftPatternId: null });
 
@@ -386,50 +330,46 @@ function SectorsTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     if (!form.name.trim() || !form.companyId) {
-      setFeedback({ type: "error", msg: "Nome e empresa são obrigatórios." }); return;
+      showToast("Nome e empresa são obrigatórios.", "error"); return;
     }
     setIsSaving(true);
     try {
       await adminService.createSector(form);
-      setFeedback({ type: "success", msg: "Setor criado com sucesso!" });
+      showToast("Setor criado com sucesso!", "success");
       setIsOpen(false); setForm({ name: "", companyId: 0, defaultShiftPatternId: null }); load();
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao criar setor.") });
+      showToast(apiError(err, "Erro ao criar setor."), "error");
     } finally { setIsSaving(false); }
   };
 
   return (
     <Section
       title="Setores"
-      icon={<Layers size={20} className="text-[#0058be]" />}
+      icon={<Layers size={20} className="text-[var(--color-accent)]" />}
       description="Setores agrupam equipes de escala por empresa."
-      onAdd={() => { setFeedback(null); setIsOpen(true); }}
+      onAdd={() => { setIsOpen(true); }}
     >
-      {feedback && !isOpen && (
-        <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />
-      )}
       <SectionTable
         isLoading={isLoading}
-        emptyMsg="Nenhum setor cadastrado."
+        emptyMsg="Adicione um setor para começar."
+        emptyIcon={<Layers size={32} />}
         headers={["#", "Nome", "Empresa", "Padrão Padrão"]}
         rows={items.map((s) => {
           const co = companies.find((c) => c.id === s.companyId);
           const pat = patterns.find((p) => p.id === s.defaultShiftPatternId);
           return [
-            <span className="font-mono text-[12px] text-[#74777d]">#{s.id}</span>,
-            <span className="font-semibold text-[#1b1c1d]">{s.name}</span>,
-            co ? <span>{co.name}</span> : <span className="text-[#c4c6cd]">—</span>,
+            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{s.id}</span>,
+            <span className="font-semibold text-[var(--color-text)]">{s.name}</span>,
+            co ? <span>{co.name}</span> : <span className="text-[var(--color-border)]">—</span>,
             pat
               ? <span className="text-[12px] font-mono">{pat.name ?? `Padrão #${pat.id}`}</span>
-              : <span className="text-[#c4c6cd]">—</span>,
+              : <span className="text-[var(--color-border)]">—</span>,
           ];
         })}
       />
       {isOpen && (
-        <Modal title="Novo Setor" icon={<Layers size={18} />} onClose={() => setIsOpen(false)}>
-          {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
+        <Modal title="Novo Setor" icon={<Layers size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <InputField
               label="Nome do setor" id="sec-name" type="text" required
@@ -441,7 +381,7 @@ function SectorsTab() {
             >
               <option value="0">Selecione...</option>
               {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+               <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </SelectField>
             <SelectField
@@ -466,12 +406,12 @@ function SectorsTab() {
 // ABA: EQUIPES (Letters)
 // ══════════════════════════════════════════════════════════════════════════════
 function LettersTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [items, setItems] = useState<Letter[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [editItem, setEditItem] = useState<Letter | null>(null);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<CreateLetterDTO>({ name: "", sectorId: 0, patternOffset: 0 });
 
@@ -491,59 +431,56 @@ function LettersTab() {
   const openCreate = () => {
     setEditItem(null);
     setForm({ name: "", sectorId: 0, patternOffset: 0 });
-    setFeedback(null); setIsOpen(true);
+    setIsOpen(true);
   };
   const openEdit = (letter: Letter) => {
     setEditItem(letter);
     setForm({ name: letter.name, sectorId: letter.sectorId, patternOffset: letter.patternOffset });
-    setFeedback(null); setIsOpen(true);
+    setIsOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     if (!form.name.trim() || !form.sectorId) {
-      setFeedback({ type: "error", msg: "Nome e setor são obrigatórios." }); return;
+      showToast("Nome e setor são obrigatórios.", "error"); return;
     }
     setIsSaving(true);
     try {
       if (editItem) {
         await adminService.updateLetter(editItem.id, form);
-        setFeedback({ type: "success", msg: "Equipe atualizada!" });
+        showToast("Equipe atualizada!", "success");
       } else {
         await adminService.createLetter(form);
-        setFeedback({ type: "success", msg: "Equipe criada com sucesso!" });
+        showToast("Equipe criada com sucesso!", "success");
       }
       setIsOpen(false); load();
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao salvar equipe.") });
+      showToast(apiError(err, "Erro ao salvar equipe."), "error");
     } finally { setIsSaving(false); }
   };
 
   return (
     <Section
       title="Equipes (Letters)"
-      icon={<Tags size={20} className="text-[#0058be]" />}
+      icon={<Tags size={20} className="text-[var(--color-accent)]" />}
       description="Equipes identificam grupos de operadores numa escala rotativa."
       onAdd={openCreate}
     >
-      {feedback && !isOpen && (
-        <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />
-      )}
       <SectionTable
         isLoading={isLoading}
-        emptyMsg="Nenhuma equipe cadastrada."
+        emptyMsg="Adicione uma equipe para começar."
+        emptyIcon={<Tags size={32} />}
         headers={["#", "Nome", "Setor", "Offset", ""]}
         rows={items.map((l) => {
           const sec = sectors.find((s) => s.id === l.sectorId);
           return [
-            <span className="font-mono text-[12px] text-[#74777d]">#{l.id}</span>,
-            <span className="font-bold text-[#1b1c1d] text-[15px]">{l.name}</span>,
-            sec ? <span>{sec.name}</span> : <span className="text-[#c4c6cd]">—</span>,
+            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{l.id}</span>,
+            <span className="font-bold text-[var(--color-text)] text-[15px]">{l.name}</span>,
+            sec ? <span>{sec.name}</span> : <span className="text-[var(--color-border)]">—</span>,
             <span className="font-mono text-[12px]">{l.patternOffset}</span>,
             <button
               onClick={() => openEdit(l)}
-              className="text-[12px] font-semibold text-[#0058be] hover:underline"
+              className="text-[12px] font-semibold text-[var(--color-accent)] hover:underline"
             >
               Editar
             </button>,
@@ -553,10 +490,9 @@ function LettersTab() {
       {isOpen && (
         <Modal
           title={editItem ? `Editar Equipe "${editItem.name}"` : "Nova Equipe"}
-          icon={<Tags size={18} />}
+          icon={<Tags size={18} className="text-[var(--color-accent)]" />}
           onClose={() => setIsOpen(false)}
         >
-          {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <InputField
               label="Nome da equipe" id="lt-name" type="text" required
@@ -593,10 +529,10 @@ function LettersTab() {
 // ABA: TURNOS (Shifts)
 // ══════════════════════════════════════════════════════════════════════════════
 function ShiftsTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [items, setItems] = useState<Shift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<CreateShiftDTO>({ name: "", startTime: "06:00", endTime: "14:00", isDayOff: false });
 
@@ -609,45 +545,41 @@ function ShiftsTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
-    if (!form.name.trim()) { setFeedback({ type: "error", msg: "Nome é obrigatório." }); return; }
+    if (!form.name.trim()) { showToast("Nome é obrigatório.", "error"); return; }
     setIsSaving(true);
     try {
       await adminService.createShift(form);
-      setFeedback({ type: "success", msg: "Turno criado!" });
+      showToast("Turno criado!", "success");
       setIsOpen(false); setForm({ name: "", startTime: "06:00", endTime: "14:00", isDayOff: false }); load();
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao criar turno.") });
+      showToast(apiError(err, "Erro ao criar turno."), "error");
     } finally { setIsSaving(false); }
   };
 
   return (
     <Section
       title="Turnos (Shifts)"
-      icon={<Clock size={20} className="text-[#0058be]" />}
+      icon={<Clock size={20} className="text-[var(--color-accent)]" />}
       description="Configure os tipos de turno: Manhã, Tarde, Noite, Folga."
-      onAdd={() => { setFeedback(null); setIsOpen(true); }}
+      onAdd={() => { setIsOpen(true); }}
     >
-      {feedback && !isOpen && (
-        <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />
-      )}
       <SectionTable
         isLoading={isLoading}
         emptyMsg="Nenhum turno cadastrado."
+        emptyIcon={<Clock size={32} />}
         headers={["#", "Nome", "Início", "Fim", "Folga"]}
         rows={items.map((s) => [
-          <span className="font-mono text-[12px] text-[#74777d]">#{s.id}</span>,
-          <span className="font-semibold text-[#1b1c1d]">{s.name}</span>,
+          <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{s.id}</span>,
+          <span className="font-semibold text-[var(--color-text)]">{s.name}</span>,
           <span className="font-mono text-[12px]">{s.startTime?.slice(0, 5) ?? "—"}</span>,
           <span className="font-mono text-[12px]">{s.endTime?.slice(0, 5) ?? "—"}</span>,
           s.isDayOff
-            ? <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-emerald-100 text-emerald-700">SIM</span>
-            : <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-zinc-100 text-zinc-500">NÃO</span>,
+            ? <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[var(--color-success-subtle)] text-[var(--color-success)]">SIM</span>
+            : <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[var(--color-surface-dim)] text-[var(--color-text-muted)]">NÃO</span>,
         ])}
       />
       {isOpen && (
-        <Modal title="Novo Turno" icon={<Clock size={18} />} onClose={() => setIsOpen(false)}>
-          {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
+        <Modal title="Novo Turno" icon={<Clock size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <InputField
               label="Nome do turno" id="sh-name" type="text" required placeholder="Ex: Manhã, Tarde, Noite, Folga"
@@ -671,7 +603,7 @@ function ShiftsTab() {
                 checked={form.isDayOff}
                 onChange={(e) => setForm({ ...form, isDayOff: e.target.checked })}
               />
-              <label htmlFor="sh-dayoff" className="text-[13px] font-medium text-[#44474c]">
+              <label htmlFor="sh-dayoff" className="text-[13px] font-medium text-[var(--color-text-muted)]">
                 É um dia de folga
               </label>
             </div>
@@ -687,11 +619,11 @@ function ShiftsTab() {
 // ABA: PADRÕES DE TURNO (ShiftPatterns)
 // ══════════════════════════════════════════════════════════════════════════════
 function PatternsTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [items, setItems] = useState<ShiftPattern[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<CreateShiftPatternDTO>({ name: "", sequence: "" });
 
@@ -710,15 +642,14 @@ function PatternsTab() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
-    if (!form.sequence.trim()) { setFeedback({ type: "error", msg: "Sequência é obrigatória." }); return; }
+    if (!form.sequence.trim()) { showToast("Sequência é obrigatória.", "error"); return; }
     setIsSaving(true);
     try {
       await adminService.createShiftPattern(form);
-      setFeedback({ type: "success", msg: "Padrão criado!" });
+      showToast("Padrão criado!", "success");
       setIsOpen(false); setForm({ name: "", sequence: "" }); load();
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao criar padrão.") });
+      showToast(apiError(err, "Erro ao criar padrão."), "error");
     } finally { setIsSaving(false); }
   };
 
@@ -733,19 +664,16 @@ function PatternsTab() {
   return (
     <Section
       title="Padrões de Turno"
-      icon={<GitBranch size={20} className="text-[#0058be]" />}
+      icon={<GitBranch size={20} className="text-[var(--color-accent)]" />}
       description="Sequências de turnos que definem a rotatividade das equipes."
-      onAdd={() => { setFeedback(null); setIsOpen(true); }}
+      onAdd={() => { setIsOpen(true); }}
     >
-      {feedback && !isOpen && (
-        <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />
-      )}
       {shifts.length > 0 && (
-        <div className="mb-4 p-3 bg-[#f0f4ff] rounded-[8px] border border-[#c7d7fc]">
-          <p className="text-[11px] font-bold text-[#0058be] uppercase tracking-wider mb-1.5">IDs disponíveis dos Turnos</p>
+        <div className="mb-4 p-3 bg-[var(--color-accent-subtle)] rounded-[8px] border border-[var(--color-accent-dim)]">
+          <p className="text-[11px] font-bold text-[var(--color-accent)] uppercase tracking-wider mb-1.5">IDs disponíveis dos Turnos</p>
           <div className="flex flex-wrap gap-1.5">
             {shifts.map((s) => (
-              <span key={s.id} className="px-2 py-0.5 bg-white border border-[#c7d7fc] rounded-[4px] text-[11px] font-mono font-bold text-[#1d4ed8]">
+              <span key={s.id} className="px-2 py-0.5 bg-[var(--color-surface)] border border-[var(--color-accent-dim)] rounded-[4px] text-[11px] font-mono font-bold text-[var(--color-accent-text)]">
                 {s.id} = {s.name}
               </span>
             ))}
@@ -755,17 +683,17 @@ function PatternsTab() {
       <SectionTable
         isLoading={isLoading}
         emptyMsg="Nenhum padrão de turno cadastrado."
+        emptyIcon={<GitBranch size={32} />}
         headers={["#", "Nome", "Sequência (IDs)", "Sequência (Nomes)"]}
         rows={items.map((p) => [
-          <span className="font-mono text-[12px] text-[#74777d]">#{p.id}</span>,
-          <span className="font-semibold text-[#1b1c1d]">{p.name ?? "—"}</span>,
-          <span className="font-mono text-[11px] bg-zinc-100 px-2 py-0.5 rounded">{p.sequence}</span>,
-          <span className="text-[12px] text-[#44474c]">{parseSequence(p.sequence)}</span>,
+          <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{p.id}</span>,
+          <span className="font-semibold text-[var(--color-text)]">{p.name ?? "—"}</span>,
+          <span className="font-mono text-[11px] bg-[var(--color-surface-dim)] px-2 py-0.5 rounded">{p.sequence}</span>,
+          <span className="text-[12px] text-[var(--color-text-muted)]">{parseSequence(p.sequence)}</span>,
         ])}
       />
       {isOpen && (
-        <Modal title="Novo Padrão de Turno" icon={<GitBranch size={18} />} onClose={() => setIsOpen(false)}>
-          {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
+        <Modal title="Novo Padrão de Turno" icon={<GitBranch size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>
           <form onSubmit={handleSave} className="flex flex-col gap-4">
             <InputField
               label="Nome (opcional)" id="pt-name" type="text"
@@ -778,7 +706,7 @@ function PatternsTab() {
               value={form.sequence} onChange={(e) => setForm({ ...form, sequence: e.target.value })}
             />
             {form.sequence && (
-              <div className="p-3 bg-[#f0f4ff] rounded-[8px] text-[12px] text-[#0058be] font-medium">
+              <div className="p-3 bg-[var(--color-accent-subtle)] rounded-[8px] text-[12px] text-[var(--color-accent)] font-medium">
                 Preview: {parseSequence(form.sequence)}
               </div>
             )}
@@ -794,11 +722,11 @@ function PatternsTab() {
 // ABA: GERAR ESCALA
 // ══════════════════════════════════════════════════════════════════════════════
 function GenerateTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [patterns, setPatterns] = useState<ShiftPattern[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
   const [form, setForm] = useState<GenerateRotationDTO>({
@@ -818,44 +746,41 @@ function GenerateTab() {
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     if (!form.sectorId || !form.shiftPatternId) {
-      setFeedback({ type: "error", msg: "Selecione o setor e o padrão de turno." }); return;
+      showToast("Selecione o setor e o padrão de turno.", "error"); return;
     }
     if (form.endDate < form.startDate) {
-      setFeedback({ type: "error", msg: "Data de fim não pode ser anterior à data de início." }); return;
+      showToast("Data de fim não pode ser anterior à data de início.", "error"); return;
     }
     setIsSaving(true);
     try {
       const res = await adminService.generateRotation(form);
-      setFeedback({ type: "success", msg: res.mensagem ?? "Escala gerada com sucesso!" });
+      showToast(res.mensagem ?? "Escala gerada com sucesso!", "success");
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao gerar escala.") });
+      showToast(apiError(err, "Erro ao gerar escala."), "error");
     } finally { setIsSaving(false); }
   };
 
   return (
     <div>
       <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-[#eff6ff] flex items-center justify-center shrink-0">
-          <CalendarCog size={20} className="text-[#1d4ed8]" />
+        <div className="w-10 h-10 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center shrink-0">
+          <CalendarCog size={20} className="text-[var(--color-accent-hover)]" />
         </div>
         <div>
-          <h2 className="text-[20px] font-bold text-[#041627]">Gerar Escala Rotativa</h2>
-          <p className="text-[13px] text-[#74777d] mt-0.5">
+          <h2 className="text-[20px] font-bold text-[var(--color-text)]">Gerar Escala Rotativa</h2>
+          <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
             Gera automaticamente os dias de escala para todas as equipes do setor no período informado.
           </p>
         </div>
       </div>
 
-      {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
-
       {isLoading ? (
         <div className="flex items-center gap-2 py-8">
-          <Loader2 className="w-5 h-5 text-[#0058be] animate-spin" /> <span className="text-[13px] text-[#74777d]">Carregando...</span>
+          <Loader2 className="w-5 h-5 text-[var(--color-accent)] animate-spin" /> <span className="text-[13px] text-[var(--color-text-faint)]">Carregando...</span>
         </div>
       ) : (
-        <form onSubmit={handleGenerate} className="bg-white rounded-[12px] border border-[#e4e2e3] shadow-sm p-6 flex flex-col gap-5 max-w-[520px]">
+        <form onSubmit={handleGenerate} className="bg-[var(--color-surface)] rounded-[12px] border border-[var(--color-border)] shadow-sm p-6 flex flex-col gap-5 max-w-[520px]">
           <div className="grid grid-cols-2 gap-4">
             <InputField label="Data de Início *" id="gen-start" type="date" required
               value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })}
@@ -883,10 +808,10 @@ function GenerateTab() {
               <option key={p.id} value={p.id}>{p.name ?? `Padrão #${p.id}`} — {p.sequence}</option>
             ))}
           </SelectField>
-          <div className="flex justify-end pt-2 border-t border-[#efedef]">
+          <div className="flex justify-end pt-4 border-t border-[var(--color-border-subtle)] mt-2">
             <Button
               type="submit" disabled={isSaving}
-              className="w-auto px-6 bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-bold"
+              className="w-auto px-6 bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-bold"
             >
               {isSaving
                 ? <><Loader2 size={15} className="animate-spin" /> Gerando...</>
@@ -903,46 +828,43 @@ function GenerateTab() {
 // ABA: ZERAR ESCALA (ação destrutiva)
 // ══════════════════════════════════════════════════════════════════════════════
 function ResetTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [isResetting, setIsResetting] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
 
   const canConfirm = confirmText === "CONFIRMAR";
 
   const handleReset = async () => {
     if (!canConfirm) return;
     setIsResetting(true);
-    setFeedback(null);
     try {
       const res = await adminService.resetEscala();
-      setFeedback({ type: "success", msg: res.mensagem ?? "Escala zerada com sucesso." });
+      showToast(res.mensagem ?? "Escala zerada com sucesso.", "success");
       setIsConfirmOpen(false);
       setConfirmText("");
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao zerar escala.") });
+      showToast(apiError(err, "Erro ao zerar escala."), "error");
     } finally { setIsResetting(false); }
   };
 
   return (
     <div>
       <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
-          <Trash2 size={20} className="text-red-500" />
+        <div className="w-10 h-10 rounded-xl bg-[var(--color-error-subtle)] flex items-center justify-center shrink-0">
+          <Trash2 size={20} className="text-[var(--color-error)]" />
         </div>
         <div>
           <h2 className="text-[20px] font-bold text-red-700">Zerar Escala</h2>
-          <p className="text-[13px] text-[#74777d] mt-0.5">
-            Remove <strong>todos</strong> os dias de escala do banco de dados. Ação irreversível.
+          <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
+            Remove <strong className="text-red-700">todos</strong> os dias de escala do banco de dados. Ação irreversível.
           </p>
         </div>
       </div>
 
-      {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
-
-      <div className="bg-red-50 border border-red-200 rounded-[12px] p-6 max-w-[520px]">
+      <div className="bg-[var(--color-error-subtle)] border border-[var(--color-error)] rounded-[12px] p-6 max-w-[520px]">
         <div className="flex items-start gap-3 mb-5">
-          <AlertCircle size={18} className="text-red-500 mt-0.5 shrink-0" />
+          <AlertCircle size={18} className="text-[var(--color-error)] mt-0.5 shrink-0" />
           <div>
             <p className="text-[14px] font-bold text-red-700">Atenção — esta ação é irreversível!</p>
             <ul className="text-[13px] text-red-600 mt-2 space-y-1 list-disc list-inside">
@@ -953,68 +875,54 @@ function ResetTab() {
           </div>
         </div>
         <button
-          onClick={() => { setIsConfirmOpen(true); setConfirmText(""); setFeedback(null); }}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-[6px] text-[13px] font-bold bg-red-600 text-white hover:bg-red-700 active:bg-red-800 transition-colors"
+          onClick={() => { setIsConfirmOpen(true); setConfirmText(""); }}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-[6px] text-[13px] font-bold bg-[var(--color-error)] text-white hover:opacity-90 active:opacity-80 transition-colors"
         >
           <Trash2 size={15} /> Zerar Toda a Escala
         </button>
       </div>
 
       {isConfirmOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-zinc-900/50 backdrop-blur-sm"
-            onClick={() => setIsConfirmOpen(false)}
+        <Modal
+          title="Confirmação Final"
+          icon={<Trash2 size={18} className="text-[var(--color-error)]" />}
+          onClose={() => setIsConfirmOpen(false)}
+          size="md"
+        >
+          <p className="text-[13px] text-[var(--color-text-muted)] mb-4">
+            Para confirmar, digite <span className="font-bold text-red-600 font-mono bg-red-50 px-1.5 py-0.5 rounded">CONFIRMAR</span> no campo abaixo:
+          </p>
+          <input
+            type="text"
+            className="w-full h-[40px] px-3 text-[14px] font-mono font-bold border-2 rounded-[6px] focus:outline-none transition-colors mb-2"
+            style={{
+              borderColor: canConfirm ? "var(--color-error)" : "var(--color-border)",
+              backgroundColor: canConfirm ? "var(--color-error-subtle)" : "var(--color-bg)",
+              color: "var(--color-text)",
+            }}
+            placeholder="Digite CONFIRMAR"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            autoFocus
           />
-          <div className="relative w-full max-w-[420px] bg-white rounded-[14px] shadow-2xl p-8">
+          <div className="flex gap-3 mt-5 border-t border-[var(--color-border-subtle)] pt-4">
             <button
               onClick={() => setIsConfirmOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-700"
+              className="flex-1 h-[40px] rounded-[6px] border border-[var(--color-border)] text-[13px] font-semibold text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dim)] transition-colors"
             >
-              <X size={20} />
+              Cancelar
             </button>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
-                <Trash2 size={18} className="text-red-500" />
-              </div>
-              <h3 className="text-[17px] font-bold text-red-700">Confirmação Final</h3>
-            </div>
-            <p className="text-[13px] text-[#44474c] mb-4">
-              Para confirmar, digite <span className="font-bold text-red-600 font-mono bg-red-50 px-1.5 py-0.5 rounded">CONFIRMAR</span> no campo abaixo:
-            </p>
-            <input
-              type="text"
-              className="w-full h-[40px] px-3 text-[14px] font-mono font-bold border-2 rounded-[6px] focus:outline-none transition-colors"
-              style={{
-                borderColor: canConfirm ? "#dc2626" : "#e4e2e3",
-                backgroundColor: canConfirm ? "#fef2f2" : "#fbf9fa",
-                color: "#041627",
-              }}
-              placeholder="Digite CONFIRMAR"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              autoFocus
-            />
-            <div className="flex gap-3 mt-5">
-              <button
-                onClick={() => setIsConfirmOpen(false)}
-                className="flex-1 h-[40px] rounded-[6px] border border-[#e4e2e3] text-[13px] font-semibold text-[#44474c] hover:bg-[#f8fafc] transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleReset}
-                disabled={!canConfirm || isResetting}
-                className="flex-1 h-[40px] rounded-[6px] text-[13px] font-bold text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: canConfirm ? "#dc2626" : "#ef4444" }}
-              >
-                {isResetting
-                  ? <><Loader2 size={14} className="animate-spin" /> Zerando...</>
-                  : <><Trash2 size={14} /> Zerar Agora</>}
-              </button>
-            </div>
+            <button
+              onClick={handleReset}
+              disabled={!canConfirm || isResetting}
+              className="flex-1 h-[40px] rounded-[6px] text-[13px] font-bold text-white transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--color-error)] hover:opacity-90"
+            >
+              {isResetting
+                ? <><Loader2 size={14} className="animate-spin" /> Zerando...</>
+                : <><Trash2 size={14} /> Zerar Agora</>}
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
@@ -1024,6 +932,7 @@ function ResetTab() {
 // ABA: PROMOVER USUÁRIO
 // ══════════════════════════════════════════════════════════════════════════════
 function PromoteTab() {
+  const showToast = useToastStore((s) => s.showToast);
   const [searchEmail, setSearchEmail] = useState("");
   const [foundUser, setFoundUser] = useState<User | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -1032,7 +941,6 @@ function PromoteTab() {
   const [cargos, setCargos] = useState<string[]>([]);
   const [selectedCargo, setSelectedCargo] = useState("");
   const [isPromoting, setIsPromoting] = useState(false);
-  const [feedback, setFeedback] = useState<{ type: "error" | "success"; msg: string } | null>(null);
 
   useEffect(() => {
     adminService.listCargos().then(setCargos).catch(() => setCargos([]));
@@ -1040,7 +948,7 @@ function PromoteTab() {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFoundUser(null); setSearchError(null); setFeedback(null); setSelectedCargo("");
+    setFoundUser(null); setSearchError(null); setSelectedCargo("");
     if (!searchEmail.trim()) { setSearchError("Informe um e-mail."); return; }
     setIsSearching(true);
     try {
@@ -1058,44 +966,41 @@ function PromoteTab() {
   const handlePromote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!foundUser || !selectedCargo) return;
-    setFeedback(null);
     setIsPromoting(true);
     try {
       const res = await adminService.promoteUser({ email: foundUser.user, cargo: selectedCargo });
-      setFeedback({ type: "success", msg: res.mensagem ?? `${foundUser.completeName} promovido para ${selectedCargo}!` });
+      showToast(res.mensagem ?? `${foundUser.completeName} promovido para ${selectedCargo}!`, "success");
       setFoundUser(null); setSearchEmail(""); setSelectedCargo("");
     } catch (err) {
-      setFeedback({ type: "error", msg: apiError(err, "Erro ao promover usuário.") });
+      showToast(apiError(err, "Erro ao promover usuário."), "error");
     } finally { setIsPromoting(false); }
   };
 
   return (
     <div>
       <div className="flex items-start gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-[#eff6ff] flex items-center justify-center shrink-0">
-          <UserCog size={20} className="text-[#1d4ed8]" />
+        <div className="w-10 h-10 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center shrink-0">
+          <UserCog size={20} className="text-[var(--color-accent-hover)]" />
         </div>
         <div>
-          <h2 className="text-[20px] font-bold text-[#041627]">Promover Usuário</h2>
-          <p className="text-[13px] text-[#74777d] mt-0.5">
+          <h2 className="text-[20px] font-bold text-[var(--color-text)]">Promover Usuário</h2>
+          <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">
             Busque um usuário pelo e-mail e altere seu cargo no sistema.
           </p>
         </div>
       </div>
 
-      {feedback && <Feedback type={feedback.type} message={feedback.msg} onClose={() => setFeedback(null)} />}
-
       <div className="max-w-[520px] flex flex-col gap-5">
         {/* Busca de usuário */}
-        <div className="bg-white rounded-[12px] border border-[#e4e2e3] shadow-sm p-5">
-          <p className="text-[12px] font-bold text-[#74777d] uppercase tracking-wider mb-3">
+        <div className="bg-[var(--color-surface)] rounded-[12px] border border-[var(--color-border)] shadow-sm p-5">
+          <p className="text-[12px] font-bold text-[var(--color-text-faint)] uppercase tracking-wider mb-3">
             1 — Buscar Usuário
           </p>
           <form onSubmit={handleSearch} className="flex gap-2">
             <input
               type="email"
               placeholder="operador@empresa.com"
-              className="flex-1 h-[40px] px-3 text-[14px] text-[#1b1c1d] bg-[#fbf9fa] border border-[#c4c6cd] rounded-[6px] focus:outline-none focus:border-[#0058be] transition-colors"
+              className="flex-1 h-[40px] px-3 text-[14px] text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[6px] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
               value={searchEmail}
               onChange={(e) => setSearchEmail(e.target.value)}
               required
@@ -1103,21 +1008,21 @@ function PromoteTab() {
             <button
               type="submit"
               disabled={isSearching}
-              className="h-[40px] px-4 rounded-[6px] text-[13px] font-bold bg-[#1d4ed8] text-white hover:bg-[#1e40af] disabled:opacity-40 transition-colors flex items-center gap-1.5"
+              className="h-[40px] px-4 rounded-[6px] text-[13px] font-bold bg-[var(--color-accent-hover)] text-white hover:bg-[var(--color-accent-text)] disabled:opacity-40 transition-colors flex items-center gap-1.5"
             >
               {isSearching ? <Loader2 size={14} className="animate-spin" /> : null}
               Buscar
             </button>
           </form>
           {searchError && (
-            <p className="text-[12px] text-red-600 mt-2 flex items-center gap-1">
+            <p className="text-[12px] text-[var(--color-error)] mt-2 flex items-center gap-1">
               <AlertCircle size={12} /> {searchError}
             </p>
           )}
 
           {/* Resultado da busca */}
           {foundUser && (
-            <div className="mt-4 p-3 bg-[#f0f4ff] border border-[#c7d7fc] rounded-[8px] flex items-center gap-3">
+            <div className="mt-4 p-3 bg-[var(--color-accent-subtle)] border border-[var(--color-accent-dim)] rounded-[8px] flex items-center gap-3">
               <div
                 className="w-9 h-9 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0"
                 style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent-text)" }}
@@ -1125,20 +1030,20 @@ function PromoteTab() {
                 {(foundUser.completeName || foundUser.user).charAt(0).toUpperCase()}
               </div>
               <div>
-                <p className="text-[14px] font-bold text-[#041627]">
+                <p className="text-[14px] font-bold text-[var(--color-text)]">
                   {foundUser.completeName || "—"}
                 </p>
-                <p className="text-[12px] text-[#74777d]">{foundUser.user}</p>
+                <p className="text-[12px] text-[var(--color-text-muted)]">{foundUser.user}</p>
               </div>
-              <CheckCircle2 size={18} className="text-emerald-500 ml-auto shrink-0" />
+              <CheckCircle2 size={18} className="text-[var(--color-success)] ml-auto shrink-0" />
             </div>
           )}
         </div>
 
         {/* Selecionar cargo e confirmar */}
         {foundUser && (
-          <div className="bg-white rounded-[12px] border border-[#e4e2e3] shadow-sm p-5">
-            <p className="text-[12px] font-bold text-[#74777d] uppercase tracking-wider mb-3">
+          <div className="bg-[var(--color-surface)] rounded-[12px] border border-[var(--color-border)] shadow-sm p-5">
+            <p className="text-[12px] font-bold text-[var(--color-text-faint)] uppercase tracking-wider mb-3">
               2 — Definir Novo Cargo
             </p>
             <form onSubmit={handlePromote} className="flex flex-col gap-4">
@@ -1151,10 +1056,10 @@ function PromoteTab() {
                   <option key={c} value={c}>{c}</option>
                 ))}
               </SelectField>
-              <div className="flex justify-end pt-2 border-t border-[#efedef]">
+              <div className="flex justify-end pt-4 border-t border-[var(--color-border-subtle)] mt-2">
                 <Button
                   type="submit" disabled={!selectedCargo || isPromoting}
-                  className="w-auto px-6 bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-bold"
+                  className="w-auto px-6 bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-bold"
                 >
                   {isPromoting
                     ? <><Loader2 size={14} className="animate-spin" /> Promovendo...</>
@@ -1184,17 +1089,17 @@ function Section({
     <div>
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#eff6ff] flex items-center justify-center shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-[var(--color-accent-subtle)] flex items-center justify-center shrink-0">
             {icon}
           </div>
           <div>
-            <h2 className="text-[20px] font-bold text-[#041627]">{title}</h2>
-            <p className="text-[13px] text-[#74777d] mt-0.5">{description}</p>
+            <h2 className="text-[20px] font-bold text-[var(--color-text)]">{title}</h2>
+            <p className="text-[13px] text-[var(--color-text-faint)] mt-0.5">{description}</p>
           </div>
         </div>
         <button
           onClick={onAdd}
-          className="flex items-center gap-2 px-4 py-2 rounded-[7px] text-[13px] font-bold bg-[#1d4ed8] text-white hover:bg-[#1e40af] active:bg-[#1e3a8a] transition-colors shrink-0"
+          className="flex items-center gap-2 px-4 py-2 rounded-[7px] text-[13px] font-bold bg-[var(--color-accent-hover)] text-white hover:bg-[var(--color-accent-text)] active:bg-[var(--color-accent-text)] transition-colors shrink-0"
         >
           <Plus size={15} /> Novo
         </button>
@@ -1214,11 +1119,11 @@ function SelectField({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-[11px] font-semibold text-[#44474c] uppercase tracking-wider">
+      <label className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
         {label}
       </label>
       <select
-        className="w-full h-[40px] px-3 text-[14px] text-[#1b1c1d] bg-[#fbf9fa] border border-[#c4c6cd] rounded-[6px] focus:outline-none focus:border-[#0058be] transition-colors"
+        className="w-full h-[40px] px-3 text-[14px] text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[6px] focus:outline-none focus:border-[var(--color-accent)] transition-colors"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -1236,11 +1141,11 @@ function ModalFooter({
   saveLabel?: string;
 }) {
   return (
-    <div className="flex justify-end gap-3 pt-2 border-t border-[#efedef] mt-2">
+    <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border-subtle)] mt-2">
       <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
       <Button
         type="submit" disabled={isSaving}
-        className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-bold"
+        className="bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-bold"
       >
         {isSaving ? "Salvando..." : saveLabel}
       </Button>

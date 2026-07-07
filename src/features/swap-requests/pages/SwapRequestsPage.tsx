@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   ArrowLeftRight,
   Plus,
-  X,
   Loader2,
   CheckCircle2,
   XCircle,
@@ -26,6 +25,8 @@ import { usersService, type User } from "../../users/api/usersService";
 import { useAuthStore } from "../../../features/auth/store/authStore";
 import { useHasRole } from "../../../lib/useHasRole";
 import { Button } from "../../../components/ui/Button";
+import { Modal } from "../../../components/ui/Modal";
+import { useToastStore } from "../../../lib/toastStore";
 import type { ScheduleDay } from "../../dashboard/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -61,9 +62,9 @@ function timeAgo(iso: string): string {
 /** Badge colorido para o status do pedido */
 const StatusBadge = ({ status }: { status: number }) => {
   const configs: Record<number, { color: string; icon: React.ReactNode }> = {
-    [SwapStatus.Pending]:  { color: "bg-amber-100 text-amber-700",   icon: <Clock size={11} /> },
-    [SwapStatus.Approved]: { color: "bg-emerald-100 text-emerald-700", icon: <CheckCircle2 size={11} /> },
-    [SwapStatus.Rejected]: { color: "bg-red-100 text-red-600",        icon: <XCircle size={11} /> },
+    [SwapStatus.Pending]:  { color: "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]",   icon: <Clock size={11} /> },
+    [SwapStatus.Approved]: { color: "bg-[var(--color-success-subtle)] text-[var(--color-success)]", icon: <CheckCircle2 size={11} /> },
+    [SwapStatus.Rejected]: { color: "bg-[var(--color-error-subtle)] text-[var(--color-error)]",        icon: <XCircle size={11} /> },
   };
   const c = configs[status] ?? configs[SwapStatus.Pending];
   return (
@@ -79,6 +80,7 @@ type Tab = "pending" | "history" | "create";
 
 // ── Componente principal ───────────────────────────────────────────────────────
 export default function SwapRequestsPage() {
+  const showToast = useToastStore((s) => s.showToast);
   const [activeTab, setActiveTab] = useState<Tab>("pending");
 
   // ── Dados do usuário logado ──────────────────────────────────────────────────
@@ -92,7 +94,6 @@ export default function SwapRequestsPage() {
   const [pending, setPending] = useState<SwapRequest[]>([]);
   const [isPendingLoading, setIsPendingLoading] = useState(true);
   const [respondingId, setRespondingId] = useState<number | null>(null);
-  const [respondError, setRespondError] = useState<string | null>(null);
 
   const fetchPending = useCallback(async () => {
     setIsPendingLoading(true);
@@ -127,7 +128,6 @@ export default function SwapRequestsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createSuccess, setCreateSuccess] = useState<string | null>(null);
 
   const [users, setUsers] = useState<User[]>([]);
   const [scheduleDays, setScheduleDays] = useState<ScheduleDay[]>([]);
@@ -151,7 +151,6 @@ export default function SwapRequestsPage() {
   // ── Carregar dados do modal ao abrir ─────────────────────────────────────────
   const openModal = useCallback(async () => {
     setCreateError(null);
-    setCreateSuccess(null);
     setFormData({ targetUserId: "", scheduleDayId: "" });
     setIsModalOpen(true);
     setIsLoadingModal(true);
@@ -196,21 +195,20 @@ export default function SwapRequestsPage() {
     } finally {
       setIsLoadingModal(false);
     }
-  }, [myUserId, myLetterId]);
+  }, [myUserId, myLetterId, canListUsers]);
 
   // ── Aceitar / Recusar ────────────────────────────────────────────────────────
   const handleRespond = async (id: number, accept: boolean) => {
-    setRespondError(null);
     setRespondingId(id);
     try {
       await swapRequestsService.respond(id, accept);
-      // Remove da lista de pendentes localmente (optimistic)
       setPending((prev) => prev.filter((r) => r.id !== id));
+      showToast(accept ? "Pedido aceito com sucesso." : "Pedido recusado.", "success");
     } catch (err) {
       const msg = axios.isAxiosError(err)
         ? (err.response?.data?.mensagem ?? err.response?.data?.erro ?? "Erro ao responder.")
         : "Erro inesperado.";
-      setRespondError(msg);
+      showToast(msg, "error");
     } finally {
       setRespondingId(null);
     }
@@ -220,7 +218,6 @@ export default function SwapRequestsPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError(null);
-    setCreateSuccess(null);
 
     if (!formData.targetUserId) {
       setCreateError("Selecione o colega para a troca.");
@@ -237,8 +234,9 @@ export default function SwapRequestsPage() {
         targetUserId: formData.targetUserId,
         scheduleDayId: Number(formData.scheduleDayId),
       });
-      setCreateSuccess(res.mensagem ?? "Pedido de troca enviado com sucesso!");
+      showToast(res.mensagem ?? "Pedido de troca enviado com sucesso!", "success");
       setFormData({ targetUserId: "", scheduleDayId: "" });
+      setIsModalOpen(false);
       // Atualiza pendentes em background
       fetchPending();
     } catch (err) {
@@ -267,26 +265,26 @@ export default function SwapRequestsPage() {
   ];
 
   const selectClass =
-    "w-full h-[40px] px-3 text-[14px] text-[#1b1c1d] bg-[#fbf9fa] border border-[#c4c6cd] rounded-[6px] focus:outline-none focus:border-[#0058be] transition-colors";
+    "w-full h-[40px] px-3 text-[14px] text-[var(--color-text)] bg-[var(--color-bg)] border border-[var(--color-border)] rounded-[6px] focus:outline-none focus:border-[var(--color-accent)] transition-colors";
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[#fbf9fa] h-full w-full">
+    <div className="flex-1 flex flex-col overflow-hidden bg-[var(--color-bg)] h-full w-full font-sans">
       <div className="flex-1 overflow-y-auto p-8 flex flex-col">
 
         {/* ── Cabeçalho ──────────────────────────────────────────────────────── */}
         <div className="flex justify-between items-start mb-8 shrink-0">
           <div>
-            <h1 className="text-[28px] font-extrabold text-[#041627] tracking-tight flex items-center gap-3">
-              <ArrowLeftRight size={26} className="text-[#0058be]" />
+            <h1 className="text-[28px] font-extrabold text-[var(--color-text)] tracking-tight flex items-center gap-3">
+              <ArrowLeftRight size={26} className="text-[var(--color-accent)]" />
               Trocas de Turno
             </h1>
-            <p className="text-[14px] text-[#74777d] mt-1">
+            <p className="text-[14px] text-[var(--color-text-faint)] mt-1">
               Gerencie pedidos de troca, aceite solicitações de colegas e consulte o histórico.
             </p>
           </div>
           <Button
             onClick={openModal}
-            className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-semibold shadow-sm shrink-0"
+            className="bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-semibold shadow-sm shrink-0"
           >
             <Plus size={18} className="mr-2" /> Nova Solicitação
           </Button>
@@ -303,7 +301,7 @@ export default function SwapRequestsPage() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className="flex items-center gap-2 pb-3 px-1 text-[14px] font-bold border-b-2 transition-all mr-5"
+                className="flex items-center gap-2 pb-3 px-1 text-[14px] font-bold border-b-2 transition-all mr-5 hover:text-[var(--color-accent)]"
                 style={{
                   borderColor: isActive ? "var(--color-accent)" : "transparent",
                   color: isActive ? "var(--color-accent-text)" : "var(--color-text-faint)",
@@ -332,26 +330,19 @@ export default function SwapRequestsPage() {
         ═══════════════════════════════════════════════════════════════════════ */}
         {activeTab === "pending" && (
           <div className="flex flex-col gap-4">
-            {respondError && (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-[8px] px-4 py-3 text-[13px] font-semibold text-red-700 mb-2">
-                <AlertCircle size={15} />
-                <span>{respondError}</span>
-                <button onClick={() => setRespondError(null)} className="ml-auto">
-                  <X size={14} />
-                </button>
-              </div>
-            )}
 
             {isPendingLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20">
-                <Loader2 className="w-8 h-8 text-[#0058be] animate-spin" />
-                <span className="text-[13px] text-[#74777d] font-medium">Buscando pedidos...</span>
+                <Loader2 className="w-8 h-8 text-[var(--color-accent)] animate-spin" />
+                <span className="text-[13px] text-[var(--color-text-faint)] font-medium">Buscando pedidos...</span>
               </div>
             ) : pending.length === 0 ? (
-              <div className="border border-dashed border-[#e4e2e3] bg-white rounded-[12px] flex flex-col items-center justify-center p-12 text-center">
-                <Inbox size={36} className="text-[#c4c6cd] mb-3" />
-                <p className="text-[15px] font-bold text-[#041627]">Nenhum pedido pendente</p>
-                <p className="text-[13px] text-[#74777d] mt-1">
+              <div className="border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] rounded-[12px] flex flex-col items-center justify-center p-12 text-center">
+                <div className="w-16 h-16 bg-[var(--color-surface-dim)] text-[var(--color-text-faint)] rounded-full flex items-center justify-center mb-4">
+                  <Inbox size={32} />
+                </div>
+                <p className="text-[18px] font-bold text-[var(--color-text)]">Nenhum pedido pendente</p>
+                <p className="text-[13px] text-[var(--color-text-muted)] mt-1">
                   Quando um colega solicitar troca com você, o pedido aparecerá aqui.
                 </p>
               </div>
@@ -371,13 +362,13 @@ export default function SwapRequestsPage() {
                 return (
                   <div
                     key={req.id}
-                    className="bg-white rounded-[12px] border border-[#e4e2e3] shadow-sm p-6 flex items-start gap-5 hover:shadow-md transition-shadow"
+                    className="bg-[var(--color-surface)] rounded-[12px] border border-[var(--color-border)] shadow-sm p-6 flex items-start gap-5 hover:shadow-md hover:border-[var(--color-border-subtle)] transition-all"
                   >
                     {/* Avatar */}
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center text-[15px] font-bold shrink-0"
                       style={{
-                        backgroundColor: "var(--color-accent-dim)",
+                        backgroundColor: "var(--color-accent-subtle)",
                         color: "var(--color-accent-text)",
                       }}
                     >
@@ -386,19 +377,19 @@ export default function SwapRequestsPage() {
 
                     {/* Conteúdo */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[14px] font-bold text-[#041627]">
-                        <span className="text-[#0058be]">{requester}</span>
+                      <p className="text-[14px] font-bold text-[var(--color-text)]">
+                        <span className="text-[var(--color-accent)]">{requester}</span>
                         {" "}quer trocar com você
                       </p>
-                      <p className="text-[13px] text-[#44474c] mt-0.5">
+                      <p className="text-[13px] text-[var(--color-text-muted)] mt-0.5">
                         Turno de{" "}
-                        <span className="font-semibold text-[#1b1c1d]">
+                        <span className="font-semibold text-[var(--color-text)]">
                           {shiftName}
                         </span>
                         {" "}em{" "}
-                        <span className="font-semibold text-[#1b1c1d]">{dayDate}</span>
+                        <span className="font-semibold text-[var(--color-text)]">{dayDate}</span>
                       </p>
-                      <p className="text-[11px] text-[#74777d] mt-1">
+                      <p className="text-[11px] text-[var(--color-text-faint)] mt-1">
                         {timeAgo(req.createdAt)} · Pedido #{req.id}
                       </p>
                     </div>
@@ -408,7 +399,7 @@ export default function SwapRequestsPage() {
                       <button
                         onClick={() => handleRespond(req.id, false)}
                         disabled={isResponding}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-[6px] text-[12px] font-bold border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 transition-colors disabled:opacity-40"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-[6px] text-[12px] font-bold border border-[var(--color-error)] text-[var(--color-error)] bg-[var(--color-error-subtle)] hover:bg-[var(--color-error-subtle)] active:bg-[var(--color-error-subtle)] transition-colors disabled:opacity-40"
                       >
                         {isResponding ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -420,7 +411,7 @@ export default function SwapRequestsPage() {
                       <button
                         onClick={() => handleRespond(req.id, true)}
                         disabled={isResponding}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-[6px] text-[12px] font-bold border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 active:bg-emerald-200 transition-colors disabled:opacity-40"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-[6px] text-[12px] font-bold border border-[var(--color-success)] text-[var(--color-success)] bg-[var(--color-success-subtle)] hover:bg-[var(--color-success-subtle)] active:bg-[var(--color-success-subtle)] transition-colors disabled:opacity-40"
                       >
                         {isResponding ? (
                           <Loader2 size={13} className="animate-spin" />
@@ -444,35 +435,37 @@ export default function SwapRequestsPage() {
           <div className="flex flex-col gap-4">
             {isHistoryLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20">
-                <Loader2 className="w-8 h-8 text-[#0058be] animate-spin" />
-                <span className="text-[13px] text-[#74777d] font-medium">Carregando histórico...</span>
+                <Loader2 className="w-8 h-8 text-[var(--color-accent)] animate-spin" />
+                <span className="text-[13px] text-[var(--color-text-faint)] font-medium">Carregando histórico...</span>
               </div>
             ) : !history || history.items.length === 0 ? (
-              <div className="border border-dashed border-[#e4e2e3] bg-white rounded-[12px] flex flex-col items-center justify-center p-12 text-center">
-                <History size={36} className="text-[#c4c6cd] mb-3" />
-                <p className="text-[15px] font-bold text-[#041627]">Nenhuma troca registrada</p>
-                <p className="text-[13px] text-[#74777d] mt-1">
+              <div className="border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] rounded-[12px] flex flex-col items-center justify-center p-12 text-center">
+                <div className="w-16 h-16 bg-[var(--color-surface-dim)] text-[var(--color-text-faint)] rounded-full flex items-center justify-center mb-4">
+                  <History size={32} />
+                </div>
+                <p className="text-[18px] font-bold text-[var(--color-text)]">Nenhuma troca registrada</p>
+                <p className="text-[13px] text-[var(--color-text-muted)] mt-1">
                   O histórico de trocas solicitadas e recebidas aparecerá aqui.
                 </p>
               </div>
             ) : (
               <>
-                <div className="bg-white rounded-[10px] border border-[#e4e2e3] shadow-sm overflow-hidden">
+                <div className="bg-[var(--color-surface)] rounded-[10px] border border-[var(--color-border)] shadow-sm overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
-                        <tr className="bg-[#f8fafc] border-b border-[#e4e2e3]">
+                        <tr className="bg-[var(--color-surface-dim)] border-b border-[var(--color-border)]">
                           {["#", "Solicitante", "Destino", "Dia / Turno", "Criado em", "Status"].map((h) => (
                             <th
                               key={h}
-                              className="px-5 py-3.5 text-[11px] font-bold text-[#74777d] uppercase tracking-wider whitespace-nowrap"
+                              className="px-5 py-3.5 text-[11px] font-bold text-[var(--color-text-faint)] uppercase tracking-wider whitespace-nowrap"
                             >
                               {h}
                             </th>
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#efedef]">
+                      <tbody className="divide-y divide-[var(--color-border-subtle)]">
                         {history.items.map((req) => {
                           const requester =
                             req.requestingUser?.completeName ||
@@ -489,8 +482,8 @@ export default function SwapRequestsPage() {
                           const isMe = req.requestingUserId === myUserId;
 
                           return (
-                            <tr key={req.id} className="hover:bg-[#fbf9fa] transition-colors">
-                              <td className="px-5 py-4 text-[12px] text-[#74777d] font-mono">
+                            <tr key={req.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                              <td className="px-5 py-4 text-[12px] text-[var(--color-text-faint)] font-mono">
                                 #{req.id}
                               </td>
                               <td className="px-5 py-4">
@@ -498,31 +491,31 @@ export default function SwapRequestsPage() {
                                   <div
                                     className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
                                     style={{
-                                      backgroundColor: isMe ? "var(--color-accent-dim)" : "var(--color-surface-dim)",
+                                      backgroundColor: isMe ? "var(--color-accent-subtle)" : "var(--color-surface-dim)",
                                       color: isMe ? "var(--color-accent-text)" : "var(--color-text-muted)",
                                     }}
                                   >
                                     {requester.charAt(0).toUpperCase()}
                                   </div>
-                                  <span className="text-[13px] font-medium text-[#1b1c1d]">
+                                  <span className="text-[13px] font-medium text-[var(--color-text)]">
                                     {requester}
                                     {isMe && (
-                                      <span className="ml-1 text-[10px] font-bold text-[#0058be]">(eu)</span>
+                                      <span className="ml-1 text-[10px] font-bold text-[var(--color-accent)]">(eu)</span>
                                     )}
                                   </span>
                                 </div>
                               </td>
-                              <td className="px-5 py-4 text-[13px] text-[#44474c] font-medium">
+                              <td className="px-5 py-4 text-[13px] text-[var(--color-text-muted)] font-medium">
                                 {target}
                                 {req.targetUserId === myUserId && (
-                                  <span className="ml-1 text-[10px] font-bold text-violet-600">(eu)</span>
+                                  <span className="ml-1 text-[10px] font-bold text-violet-600 dark:text-violet-400">(eu)</span>
                                 )}
                               </td>
                               <td className="px-5 py-4">
-                                <p className="text-[13px] font-semibold text-[#1b1c1d]">{dayDate}</p>
-                                <p className="text-[11px] text-[#74777d]">{shiftName}</p>
+                                <p className="text-[13px] font-semibold text-[var(--color-text)]">{dayDate}</p>
+                                <p className="text-[11px] text-[var(--color-text-faint)]">{shiftName}</p>
                               </td>
-                              <td className="px-5 py-4 text-[12px] text-[#74777d] whitespace-nowrap">
+                              <td className="px-5 py-4 text-[12px] text-[var(--color-text-faint)] whitespace-nowrap">
                                 {formatDateShort(req.createdAt)}
                               </td>
                               <td className="px-5 py-4">
@@ -536,27 +529,27 @@ export default function SwapRequestsPage() {
                   </div>
 
                   {/* Rodapé com paginação */}
-                  <div className="px-5 py-3 border-t border-[#e4e2e3] bg-[#f8fafc] flex items-center justify-between">
-                    <span className="text-[12px] text-[#74777d]">
+                  <div className="px-5 py-3 border-t border-[var(--color-border)] bg-[var(--color-surface-dim)] flex items-center justify-between">
+                    <span className="text-[12px] text-[var(--color-text-faint)]">
                       Página{" "}
-                      <span className="font-bold text-[#1b1c1d]">{history.currentPage}</span>
+                      <span className="font-bold text-[var(--color-text)]">{history.currentPage}</span>
                       {" "}de{" "}
-                      <span className="font-bold text-[#1b1c1d]">{history.totalPages}</span>
+                      <span className="font-bold text-[var(--color-text)]">{history.totalPages}</span>
                       {" "}·{" "}
-                      <span className="font-bold text-[#1b1c1d]">{history.totalCount}</span> registros
+                      <span className="font-bold text-[var(--color-text)]">{history.totalCount}</span> registros
                     </span>
                     <div className="flex gap-1">
                       <button
                         disabled={history.currentPage <= 1}
                         onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-[5px] text-[12px] font-semibold border border-[#e4e2e3] text-[#44474c] hover:bg-[#f0f4f8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-[5px] text-[12px] font-semibold border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dim)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronLeft size={13} /> Anterior
                       </button>
                       <button
                         disabled={history.currentPage >= history.totalPages}
                         onClick={() => setHistoryPage((p) => Math.min(history.totalPages, p + 1))}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-[5px] text-[12px] font-semibold border border-[#e4e2e3] text-[#44474c] hover:bg-[#f0f4f8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-[5px] text-[12px] font-semibold border border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-dim)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         Próximo <ChevronRight size={13} />
                       </button>
@@ -571,132 +564,111 @@ export default function SwapRequestsPage() {
 
       {/* ── Modal de Criação ──────────────────────────────────────────────────── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-zinc-900/40 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="relative w-full max-w-[480px] bg-white rounded-[14px] shadow-2xl p-8 animate-in zoom-in-95 duration-200">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-700 transition-colors"
-            >
-              <X size={20} />
-            </button>
+        <Modal
+          onClose={() => setIsModalOpen(false)}
+          title="Solicitar Troca de Turno"
+          icon={<ArrowLeftRight size={18} className="text-[var(--color-accent-hover)]" />}
+          size="md"
+        >
+          <p className="text-[13px] text-[var(--color-text-faint)] mb-6">
+            Escolha um colega e um dia da sua escala para solicitar a troca.
+          </p>
 
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-9 h-9 rounded-xl bg-[#eff6ff] flex items-center justify-center">
-                <ArrowLeftRight size={18} className="text-[#1d4ed8]" />
-              </div>
-              <h2 className="text-[19px] font-bold text-[#041627]">Solicitar Troca de Turno</h2>
+          {createError && (
+            <div className="mb-4 flex items-start gap-2 bg-[var(--color-error-subtle)] border border-[var(--color-error)] rounded-[8px] px-3 py-2.5 text-[12px] font-medium text-[var(--color-error)]">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              <span>{createError}</span>
             </div>
-            <p className="text-[13px] text-[#74777d] mb-6 ml-12">
-              Escolha um colega e um dia da sua escala para solicitar a troca.
-            </p>
+          )}
 
-            {createError && (
-              <div className="mb-4 flex items-start gap-2 bg-red-50 border border-red-200 rounded-[8px] px-3 py-2.5 text-[12px] font-medium text-red-700">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                <span>{createError}</span>
+          {isLoadingModal ? (
+            <div className="py-10 flex flex-col items-center gap-2">
+              <Loader2 className="w-6 h-6 text-[var(--color-accent)] animate-spin" />
+              <span className="text-[12px] text-[var(--color-text-faint)]">Carregando sua escala...</span>
+            </div>
+          ) : (
+            <form onSubmit={handleCreate} className="flex flex-col gap-5">
+              {/* Colega */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+                  Colega para a troca
+                </label>
+                {users.length === 0 ? (
+                  <p className="text-[12px] text-[var(--color-text-faint)] italic">
+                    Sem permissão para listar usuários ou nenhum disponível.
+                  </p>
+                ) : (
+                  <select
+                    className={selectClass}
+                    value={formData.targetUserId}
+                    onChange={(e) =>
+                      setFormData({ ...formData, targetUserId: e.target.value })
+                    }
+                  >
+                    <option value="">Selecione um colega...</option>
+                    {users.map((u) => (
+                      <option key={u.userId} value={u.userId}>
+                        {u.completeName || u.user}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
-            )}
 
-            {createSuccess && (
-              <div className="mb-4 flex items-start gap-2 bg-emerald-50 border border-emerald-200 rounded-[8px] px-3 py-2.5 text-[12px] font-medium text-emerald-700">
-                <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
-                <span>{createSuccess}</span>
-              </div>
-            )}
-
-            {isLoadingModal ? (
-              <div className="py-10 flex flex-col items-center gap-2">
-                <Loader2 className="w-6 h-6 text-[#0058be] animate-spin" />
-                <span className="text-[12px] text-[#74777d]">Carregando sua escala...</span>
-              </div>
-            ) : (
-              <form onSubmit={handleCreate} className="flex flex-col gap-5">
-                {/* Colega */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-semibold text-[#44474c] uppercase tracking-wider">
-                    Colega para a troca
-                  </label>
-                  {users.length === 0 ? (
-                    <p className="text-[12px] text-[#74777d] italic">
-                      Sem permissão para listar usuários ou nenhum disponível.
-                    </p>
-                  ) : (
-                    <select
-                      className={selectClass}
-                      value={formData.targetUserId}
-                      onChange={(e) =>
-                        setFormData({ ...formData, targetUserId: e.target.value })
-                      }
-                    >
-                      <option value="">Selecione um colega...</option>
-                      {users.map((u) => (
-                        <option key={u.userId} value={u.userId}>
-                          {u.completeName || u.user}
+              {/* Dia da escala */}
+              <div className="flex flex-col gap-1">
+                <label className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+                  Dia da sua escala
+                </label>
+                {scheduleDays.length === 0 ? (
+                  <p className="text-[12px] text-[var(--color-text-faint)] italic">
+                    Nenhum dia de escala futuro encontrado.
+                  </p>
+                ) : (
+                  <select
+                    className={selectClass}
+                    value={formData.scheduleDayId}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        scheduleDayId: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Selecione o dia...</option>
+                    {scheduleDays.map((d) => {
+                      const dateStr = d.date?.split("T")[0] ?? "";
+                      const label = formatDate(dateStr);
+                      return (
+                        <option key={d.id} value={d.id}>
+                          {label} — {d.shiftName}
                         </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
+                      );
+                    })}
+                  </select>
+                )}
+              </div>
 
-                {/* Dia da escala */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-[11px] font-semibold text-[#44474c] uppercase tracking-wider">
-                    Dia da sua escala
-                  </label>
-                  {scheduleDays.length === 0 ? (
-                    <p className="text-[12px] text-[#74777d] italic">
-                      Nenhum dia de escala futuro encontrado.
-                    </p>
-                  ) : (
-                    <select
-                      className={selectClass}
-                      value={formData.scheduleDayId}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          scheduleDayId: e.target.value,
-                        })
-                      }
-                    >
-                      <option value="">Selecione o dia...</option>
-                      {scheduleDays.map((d) => {
-                        const dateStr = d.date?.split("T")[0] ?? "";
-                        const label = formatDate(dateStr);
-                        return (
-                          <option key={d.id} value={d.id}>
-                            {label} — {d.shiftName}
-                          </option>
-                        );
-                      })}
-                    </select>
-                  )}
-                </div>
-
-                {/* Rodapé */}
-                <div className="flex justify-end gap-3 pt-2 border-t border-[#efedef] mt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsModalOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSaving || users.length === 0 || scheduleDays.length === 0}
-                    className="bg-[#1d4ed8] hover:bg-[#1e40af] text-white font-bold"
-                  >
-                    {isSaving ? "Enviando..." : "Enviar Pedido"}
-                  </Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
+              {/* Rodapé */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border-subtle)] mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSaving || users.length === 0 || scheduleDays.length === 0}
+                  className="bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-bold"
+                >
+                  {isSaving ? "Enviando..." : "Enviar Pedido"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </Modal>
       )}
     </div>
   );
