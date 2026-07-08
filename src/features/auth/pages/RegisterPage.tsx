@@ -162,7 +162,7 @@ export default function RegisterPage() {
             </div>
 
             <div style={{ marginTop: "8px" }}>
-              <Button type="submit" disabled={isLoading} isLoading={isLoading}>
+              <Button type="submit" disabled={isLoading} isLoading={isLoading} fullWidth>
                 {isLoading ? "Processando..." : <><span>Cadastrar</span><ArrowRight size={16} /></>}
               </Button>
             </div>

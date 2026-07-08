@@ -5,6 +5,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
   isLoading?: boolean;
+  /** Só use quando o botão realmente precisa ocupar 100% da largura do container
+   *  (ex: botão de submit sozinho em um formulário estreito). Por padrão o botão
+   *  tem largura de conteúdo, como qualquer botão normal. */
+  fullWidth?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -12,6 +16,7 @@ export const Button: React.FC<ButtonProps> = ({
   variant = "primary",
   size = "md",
   isLoading,
+  fullWidth = false,
   className = "",
   disabled,
   style,
@@ -60,7 +65,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      className={`w-full flex items-center justify-center gap-2 font-semibold rounded-[6px] select-none ${className}`}
+      className={`${fullWidth ? "w-full" : "w-auto"} inline-flex items-center justify-center gap-2 font-semibold rounded-[6px] select-none ${className}`}
       disabled={isDisabled}
       style={{
         ...sizeStyles[size],

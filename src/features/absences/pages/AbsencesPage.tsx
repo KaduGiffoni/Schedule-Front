@@ -4,6 +4,7 @@ import {
   Plus,
   Loader2,
   Trash2,
+  Pencil,
   Palmtree,
   UserCheck,
   AlertCircle,
@@ -46,8 +47,9 @@ export default function AbsencesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  // ── Modal de criação ─────────────────────────────────────────────────────────
+  // ── Modal de criação/edição ───────────────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -105,8 +107,33 @@ export default function AbsencesPage() {
     }
   }, [formData.type, formData.startDate]);
 
-  // ── Criar ausência ───────────────────────────────────────────────────────────
-  const handleCreate = async (e: React.FormEvent) => {
+  // ── Abrir modal para editar ──────────────────────────────────────────────────
+  const handleOpenEdit = (a: AbsenceResponseDTO) => {
+    setFormError(null);
+    setEditingId(a.id);
+    setFormData({
+      startDate: a.startDate.split("T")[0],
+      endDate: a.endDate.split("T")[0],
+      type: a.type,
+      targetUserId: a.userId,
+      substituteUserId: a.substituteUserId ?? "",
+      notes: a.notes ?? "",
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+    setFormData({
+      startDate: todayIso(), endDate: todayIso(),
+      type: AbsenceType.Ferias, targetUserId: "",
+      substituteUserId: "", notes: "",
+    });
+  };
+
+  // ── Criar ou editar ausência ──────────────────────────────────────────────────
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -131,21 +158,21 @@ export default function AbsencesPage() {
       if (isAdminOrManager && formData.targetUserId)
         payload.targetUserId = formData.targetUserId;
 
-      await absencesService.create(payload);
-      setIsModalOpen(false);
-      setFormData({
-        startDate: todayIso(), endDate: todayIso(),
-        type: AbsenceType.Ferias, targetUserId: "",
-        substituteUserId: "", notes: "",
-      });
-      showToast("Ausência registrada com sucesso", "success");
+      if (editingId) {
+        await absencesService.update(editingId, payload);
+        showToast("Ausência atualizada com sucesso", "success");
+      } else {
+        await absencesService.create(payload);
+        showToast("Ausência registrada com sucesso", "success");
+      }
+      handleCloseModal();
       await fetchAbsences();
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const msg =
           err.response?.data?.erro ||
           err.response?.data?.message ||
-          "Erro ao registrar ausência. Verifique os dados.";
+          "Erro ao salvar ausência. Verifique os dados.";
         setFormError(msg);
       } else {
         setFormError("Erro inesperado. Tente novamente.");
@@ -196,7 +223,7 @@ export default function AbsencesPage() {
             </p>
           </div>
           <Button
-            onClick={() => { setFormError(null); setIsModalOpen(true); }}
+            onClick={() => { setFormError(null); setEditingId(null); setIsModalOpen(true); }}
             className="bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-semibold shadow-sm shrink-0"
           >
             <Plus size={18} className="mr-2" /> Registrar Ausência
@@ -311,7 +338,14 @@ export default function AbsencesPage() {
 
                         {/* Ações */}
                         <td className="px-5 py-4 text-center">
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-center">
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex justify-center gap-1">
+                            <button
+                              onClick={() => handleOpenEdit(a)}
+                              className="p-1.5 rounded-[5px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)] hover:bg-[var(--color-accent-subtle)] transition-colors"
+                              title="Editar ausência"
+                            >
+                              <Pencil size={15} />
+                            </button>
                             <button
                               onClick={() => handleDelete(a.id)}
                               disabled={deletingId === a.id}
@@ -341,16 +375,18 @@ export default function AbsencesPage() {
         )}
       </div>
 
-      {/* ── Modal de Criação ──────────────────────────────────────────────────── */}
+      {/* ── Modal de Criação/Edição ────────────────────────────────────────────── */}
       {isModalOpen && (
         <Modal
-          onClose={() => setIsModalOpen(false)}
-          title="Registrar Ausência"
+          onClose={handleCloseModal}
+          title={editingId ? "Editar Ausência" : "Registrar Ausência"}
           icon={<Palmtree size={18} className="text-[var(--color-accent-hover)]" />}
           size="md"
         >
         <p className="text-[13px] text-[var(--color-text-faint)] mb-6">
-          Registre férias, atestados e outros afastamentos da equipe.
+          {editingId
+            ? "Atualize os dados desta ausência."
+            : "Registre férias, atestados e outros afastamentos da equipe."}
         </p>
 
         {formError && (
@@ -360,7 +396,7 @@ export default function AbsencesPage() {
           </div>
         )}
 
-        <form onSubmit={handleCreate} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
           {/* Tipo de ausência */}
           <div className="flex flex-col gap-1">
@@ -487,7 +523,7 @@ export default function AbsencesPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setIsModalOpen(false)}
+              onClick={handleCloseModal}
             >
               Cancelar
             </Button>
@@ -496,7 +532,9 @@ export default function AbsencesPage() {
               disabled={isSaving}
               className="bg-[var(--color-accent-hover)] hover:bg-[var(--color-accent-text)] text-white font-bold"
             >
-              {isSaving ? "Registrando..." : "Confirmar Ausência"}
+              {isSaving
+                ? (editingId ? "Salvando..." : "Registrando...")
+                : (editingId ? "Salvar Alterações" : "Confirmar Ausência")}
             </Button>
           </div>
         </form>

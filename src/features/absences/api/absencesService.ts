@@ -23,6 +23,17 @@ export const absencesService = {
   },
 
   /**
+   * PUT /api/Absences/{id}
+   * Edita uma ausência existente. Apenas o dono ou Admin/Manager podem editar.
+   * @throws AxiosError com status 403 se não autorizado.
+   * @throws AxiosError com status 404 se não encontrado.
+   */
+  update: async (id: number, data: CreateAbsenceDTO): Promise<{ mensagem: string }> => {
+    const response = await api.put<{ mensagem: string }>(`/api/Absences/${id}`, data);
+    return response.data;
+  },
+
+  /**
    * DELETE /api/Absences/{id}
    * Remove uma ausência. Apenas o dono ou Admin/Manager podem apagar.
    * @throws AxiosError com status 403 se não autorizado.

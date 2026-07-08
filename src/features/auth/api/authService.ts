@@ -1,6 +1,13 @@
 import { api } from "../../../lib/axios";
 import type { LoginRequest, AuthResponse } from "../types";
 
+export interface MeResponse {
+  userId: string;
+  email: string;
+  completeName: string;
+  roles: string[];
+}
+
 export const authService = {
   // A função que é chamada quando clicamos no botão "Sign In"
   login: async (credentials: LoginRequest): Promise<AuthResponse> => {
@@ -25,5 +32,12 @@ export const authService = {
       console.error("Erro ao registrar novo utilizador:", error);
       throw error;
     }
+  },
+
+  // O token do backend é opaco (não é um JWT decodificável no navegador), então
+  // buscamos quem é o usuário logado e suas roles diretamente da API.
+  getMe: async (): Promise<MeResponse> => {
+    const response = await api.get<MeResponse>("/api/Auth/me");
+    return response.data;
   },
 };

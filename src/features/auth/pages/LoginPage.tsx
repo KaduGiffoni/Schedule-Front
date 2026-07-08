@@ -225,7 +225,7 @@ export default function LoginPage() {
                 </span>
               </div>
 
-              <Button type="submit" isLoading={isLoading}>
+              <Button type="submit" isLoading={isLoading} fullWidth>
                 Entrar
               </Button>
             </form>
