@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Tent, PartyPopper, CalendarDays, ChevronLeft } from "lucide-react";
+import { Tent, PartyPopper, CalendarDays, ChevronLeft, Info, UserCheck } from "lucide-react";
 import { scheduleService } from "../api/scheduleService";
 import { usersService, type User } from "../../users/api/usersService";
 import { holidayService, type Holiday } from "../../settings/api/holidayService";
@@ -163,6 +163,19 @@ export const RightSidebarContent = ({
     })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  // ── Extração do Mural de Informações (Ausências do Mês) ────────────────────
+  const monthAbsences = viewedMonthShifts
+    .flatMap((s) => {
+      const dayNum = parseShiftDay(s.date);
+      return (s.absences ?? []).map((abs) => ({
+        ...abs,
+        dayNum,
+      }));
+    })
+    // Deduplica por absenceId + dayNum
+    .filter((a, idx, arr) => arr.findIndex((x) => x.absenceId === a.absenceId && x.dayNum === a.dayNum) === idx)
+    .sort((a, b) => a.dayNum - b.dayNum);
+
   // ── Renderização ───────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -191,9 +204,9 @@ export const RightSidebarContent = ({
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
           <Tent size={18} style={{ color: "var(--color-shift-morning)" }} strokeWidth={2} />
-          <h3 className="text-[15px] font-semibold" style={{ color: "var(--color-text)" }}>
+          <h3 className="text-[15px] font-bold" style={{ color: "var(--color-text)" }}>
             Escala de Hoje
-            <span className="text-[12px] font-normal ml-1" style={{ color: "var(--color-text-faint)" }}>
+            <span className="text-xs font-normal ml-1.5" style={{ color: "var(--color-text-faint)" }}>
               ({formattedToday})
             </span>
           </h3>
@@ -223,7 +236,7 @@ export const RightSidebarContent = ({
                 {value}
               </p>
               <p
-                className="text-[10.5px] font-semibold uppercase tracking-wide mt-1"
+                className="text-[10.5px] font-bold uppercase tracking-wider mt-1"
                 style={{ color: "var(--color-text-faint)" }}
               >
                 {label}
@@ -243,7 +256,7 @@ export const RightSidebarContent = ({
               <div key={key}>
                 <div className="flex items-center justify-between mb-2">
                   <h4
-                    className="text-[11.5px] font-semibold uppercase tracking-wider"
+                    className="text-xs font-bold uppercase tracking-wider"
                     style={{ color: SHIFT_COLOR_VARS[key] }}
                   >
                     {label}
@@ -263,18 +276,18 @@ export const RightSidebarContent = ({
                     data.users.map((u) => (
                       <li
                         key={u.userId}
-                        className="flex items-center gap-2 text-[13px]"
+                        className="flex items-center gap-2 text-sm font-medium"
                         style={{ color: "var(--color-text-muted)" }}
                       >
                         <span
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          className="w-2 h-2 rounded-full shrink-0"
                           style={{ backgroundColor: SHIFT_COLOR_VARS[key] }}
                         />
                         <span className="truncate">{formatName(u)}</span>
                       </li>
                     ))
                   ) : (
-                    <li className="text-[12px] italic pl-4" style={{ color: "var(--color-text-faint)" }}>
+                    <li className="text-xs italic pl-4" style={{ color: "var(--color-text-faint)" }}>
                       Nenhum operador atribuído.
                     </li>
                   )}
@@ -290,7 +303,7 @@ export const RightSidebarContent = ({
             >
               <div className="flex items-center justify-between mb-2">
                 <h4
-                  className="text-[11.5px] font-semibold uppercase tracking-wider"
+                  className="text-xs font-bold uppercase tracking-wider"
                   style={{ color: "var(--color-text-faint)" }}
                 >
                   Dia de Folga
@@ -310,18 +323,18 @@ export const RightSidebarContent = ({
                   folgaToday.users.map((u) => (
                     <li
                       key={u.userId}
-                      className="flex items-center gap-2 text-[13px]"
+                      className="flex items-center gap-2 text-sm font-medium"
                       style={{ color: "var(--color-text-muted)" }}
                     >
                       <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        className="w-2 h-2 rounded-full shrink-0"
                         style={{ backgroundColor: "var(--color-border)" }}
                       />
                       <span className="truncate">{formatName(u)}</span>
                     </li>
                   ))
                 ) : (
-                  <li className="text-[12px] italic pl-4" style={{ color: "var(--color-text-faint)" }}>
+                  <li className="text-xs italic pl-4" style={{ color: "var(--color-text-faint)" }}>
                     Nenhum operador.
                   </li>
                 )}
@@ -334,7 +347,7 @@ export const RightSidebarContent = ({
       {/* ── 2. Painel dinâmico: Feriado ou Lista ─────────────────── */}
       {activeHolidayToView ? (
         <div
-          className="rounded-xl p-5"
+          className="rounded-xl p-5 shadow-lg"
           style={{
             backgroundColor: "var(--color-warning-subtle)",
             border: "1px solid var(--color-warning)",
@@ -352,7 +365,7 @@ export const RightSidebarContent = ({
           {!hoveredDay && clickedHolidayId && (
             <button
               onClick={() => setClickedHolidayId(null)}
-              className="flex items-center text-[12px] font-semibold mb-4 transition-opacity"
+              className="flex items-center text-xs font-bold mb-4 transition-opacity"
               style={{ color: "var(--color-warning)" }}
             >
               <ChevronLeft size={16} className="mr-0.5" />
@@ -360,13 +373,13 @@ export const RightSidebarContent = ({
             </button>
           )}
 
-          <div className="flex items-center gap-2 mb-4">
-            <PartyPopper size={18} style={{ color: "var(--color-warning)" }} />
+          <div className="flex items-center gap-2.5 mb-4">
+            <PartyPopper size={20} style={{ color: "var(--color-warning)" }} className="shrink-0" />
             <div>
-              <h3 className="text-[14px] font-semibold leading-snug" style={{ color: "var(--color-text)" }}>
+              <h3 className="text-sm font-bold leading-snug" style={{ color: "var(--color-text)" }}>
                 Feriado — dia {activeHolidayDayNum}
               </h3>
-              <p className="text-[12px] mt-0.5" style={{ color: "var(--color-warning)" }}>
+              <p className="text-xs mt-0.5 font-medium" style={{ color: "var(--color-warning)" }}>
                 {activeHolidayToView.name}
               </p>
             </div>
@@ -387,13 +400,13 @@ export const RightSidebarContent = ({
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <h4
-                      className="text-[11px] font-semibold uppercase tracking-wider"
+                      className="text-xs font-bold uppercase tracking-wider"
                       style={{ color: SHIFT_COLOR_VARS[key] }}
                     >
                       {getShiftStyle(key).label}
                     </h4>
                     <span
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded-[3px] uppercase"
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-[3px] uppercase"
                       style={{
                         backgroundColor: `${SHIFT_COLOR_VARS[key]}20`,
                         color: SHIFT_COLOR_VARS[key],
@@ -407,18 +420,18 @@ export const RightSidebarContent = ({
                       data.users.map((u) => (
                         <li
                           key={u.userId}
-                          className="flex items-center gap-2 text-[12px]"
+                          className="flex items-center gap-2 text-xs font-medium"
                           style={{ color: "var(--color-text-muted)" }}
                         >
                           <span
-                            className="w-1 h-1 rounded-full shrink-0"
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ backgroundColor: SHIFT_COLOR_VARS[key] }}
                           />
                           <span className="truncate">{formatName(u)}</span>
                         </li>
                       ))
                     ) : (
-                      <li className="text-[11px] italic" style={{ color: "var(--color-text-faint)" }}>
+                      <li className="text-xs italic" style={{ color: "var(--color-text-faint)" }}>
                         Sem operadores.
                       </li>
                     )}
@@ -438,19 +451,19 @@ export const RightSidebarContent = ({
           }}
         >
           <div className="flex items-center gap-2 mb-4">
-            <CalendarDays size={17} style={{ color: "var(--color-accent)" }} />
-            <h3 className="text-[15px] font-semibold" style={{ color: "var(--color-text)" }}>
+            <CalendarDays size={18} style={{ color: "var(--color-accent)" }} />
+            <h3 className="text-[15px] font-bold" style={{ color: "var(--color-text)" }}>
               Feriados de {MONTHS_PT[viewedMonth - 1]}
             </h3>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {viewedMonthHolidays.length === 0 ? (
               <div
-                className="text-center py-5 rounded-lg"
+                className="text-center py-6 rounded-lg"
                 style={{ border: "1px dashed var(--color-border)", backgroundColor: "var(--color-surface)" }}
               >
-                <p className="text-[13px]" style={{ color: "var(--color-text-faint)" }}>
+                <p className="text-xs font-medium" style={{ color: "var(--color-text-faint)" }}>
                   Nenhum feriado neste mês.
                 </p>
               </div>
@@ -464,11 +477,11 @@ export const RightSidebarContent = ({
                     tabIndex={0}
                     onClick={() => setClickedHolidayId(h.id)}
                     onKeyDown={(e) => e.key === "Enter" && setClickedHolidayId(h.id)}
-                    className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer outline-none"
+                    className="flex items-center gap-3 p-3 rounded-lg cursor-pointer outline-none"
                     style={{
                       border: "1px solid var(--color-border)",
                       backgroundColor: "var(--color-surface)",
-                      transition: "border-color 150ms ease-out, background-color 150ms ease-out",
+                      transition: "all 150ms ease-out",
                     }}
                     onMouseEnter={(e) => {
                       const el = e.currentTarget as HTMLElement;
@@ -482,30 +495,30 @@ export const RightSidebarContent = ({
                     }}
                   >
                     <div
-                      className="w-10 h-10 rounded-lg flex flex-col items-center justify-center shrink-0"
+                      className="w-11 h-11 rounded-lg flex flex-col items-center justify-center shrink-0 shadow-sm"
                       style={{
                         backgroundColor: "var(--color-warning-subtle)",
                         border: "1px solid var(--color-warning)",
                       }}
                     >
                       <span
-                        className="text-[8.5px] font-semibold uppercase leading-none"
+                        className="text-[9px] font-bold uppercase leading-none"
                         style={{ color: "var(--color-warning)" }}
                       >
                         {MONTHS_PT[viewedMonth - 1].slice(0, 3)}
                       </span>
                       <span
-                        className="text-[15px] font-bold leading-none mt-0.5 data-numeric"
+                        className="text-base font-extrabold leading-none mt-0.5 data-numeric"
                         style={{ color: "var(--color-text)" }}
                       >
                         {hDay}
                       </span>
                     </div>
                     <div className="flex-1 overflow-hidden">
-                      <h4 className="text-[13px] font-semibold truncate" style={{ color: "var(--color-text)" }}>
+                      <h4 className="text-sm font-bold truncate" style={{ color: "var(--color-text)" }}>
                         {h.name}
                       </h4>
-                      <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--color-text-faint)" }}>
+                      <p className="text-xs truncate mt-0.5 font-medium" style={{ color: "var(--color-text-faint)" }}>
                         {h.type}
                       </p>
                     </div>
@@ -516,6 +529,72 @@ export const RightSidebarContent = ({
           </div>
         </div>
       )}
+
+      {/* ── 3. NOVO COMPONENTE: Mural de Informações (Ausências do Mês) ── */}
+      <div
+        className="rounded-xl p-5"
+        style={{
+          backgroundColor: "var(--color-surface-dim)",
+          border: "1px solid var(--color-border-subtle)",
+        }}
+      >
+        <div className="flex items-center gap-2 mb-4">
+          <Info size={18} className="text-blue-400 shrink-0" />
+          <h3 className="text-[15px] font-bold" style={{ color: "var(--color-text)" }}>
+            Mural de Ausências
+            <span className="text-xs font-normal ml-1.5" style={{ color: "var(--color-text-faint)" }}>
+              ({MONTHS_PT[viewedMonth - 1]})
+            </span>
+          </h3>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
+          {monthAbsences.length === 0 ? (
+            <div
+              className="text-center py-6 rounded-lg"
+              style={{ border: "1px dashed var(--color-border)", backgroundColor: "var(--color-surface)" }}
+            >
+              <p className="text-xs font-medium" style={{ color: "var(--color-text-faint)" }}>
+                Nenhuma ausência registrada para este mês.
+              </p>
+            </div>
+          ) : (
+            monthAbsences.map((abs, idx) => (
+              <div
+                key={`${abs.absenceId}-${abs.dayNum}-${idx}`}
+                className="flex flex-col p-3 rounded-lg border"
+                style={{
+                  backgroundColor: "var(--color-surface)",
+                  borderColor: "var(--color-border)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-sm font-bold text-gray-200 truncate">
+                    {abs.userName}
+                  </span>
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20 shrink-0"
+                  >
+                    Dia {abs.dayNum}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-400 mt-1">
+                  <span className="truncate font-medium">{abs.typeDescription}</span>
+                </div>
+                {abs.substituteUserName && (
+                  <div
+                    className="flex items-center gap-1.5 mt-2 pt-2 text-xs font-medium text-amber-400/90"
+                    style={{ borderTop: "1px dashed var(--color-border-subtle)" }}
+                  >
+                    <UserCheck size={13} className="shrink-0" />
+                    <span className="truncate">Cobertura: <strong>{abs.substituteUserName}</strong></span>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     </aside>
   );
 };

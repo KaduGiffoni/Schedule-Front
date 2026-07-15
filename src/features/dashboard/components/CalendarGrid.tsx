@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { scheduleService } from "../api/scheduleService";
 import { holidayService, type Holiday } from "../../settings/api/holidayService";
 import type { ScheduleDay } from "../types";
-import { X, PartyPopper, Palmtree, ArrowLeftRight } from "lucide-react";
+import { X, PartyPopper, Palmtree, ArrowLeftRight, UserX } from "lucide-react";
 import {
   SHIFT_ORDER,
   getShiftStyle,
@@ -15,9 +15,9 @@ import { useLettersStore } from "../../letters/store/lettersStore";
 
 // ── Skeleton Loader do Calendário ─────────────────────────────────────────────
 const CalendarSkeleton = () => (
-  <div className="grid grid-cols-7 gap-2" style={{ gridTemplateRows: "repeat(5, minmax(0, 1fr))" }}>
+  <div className="grid grid-cols-7 gap-3" style={{ gridTemplateRows: "repeat(5, minmax(0, 1fr))" }}>
     {Array.from({ length: 35 }).map((_, i) => (
-      <div key={i} className="skeleton rounded-[10px]" style={{ minHeight: "80px" }} />
+      <div key={i} className="skeleton rounded-xl" style={{ minHeight: "110px" }} />
     ))}
   </div>
 );
@@ -98,15 +98,15 @@ export const CalendarGrid = ({
 
   return (
     <div
-      className="flex-1 flex flex-col w-full rounded-2xl p-3 pb-5 relative min-h-0"
+      className="flex-1 flex flex-col w-full rounded-2xl p-4 pb-6 relative min-h-0"
       style={{ backgroundColor: "var(--color-surface-dim)" }}
     >
       {/* ── Cabeçalho dos dias da semana ──────────────────────────── */}
-      <div className="grid grid-cols-7 gap-2 mb-2 shrink-0">
+      <div className="grid grid-cols-7 gap-3 mb-3 shrink-0">
         {weekDays.map((day) => (
           <div
             key={day}
-            className="text-center text-[11px] font-semibold uppercase tracking-widest"
+            className="text-center text-xs font-bold uppercase tracking-widest"
             style={{ color: "var(--color-text-faint)" }}
           >
             {day}
@@ -119,12 +119,12 @@ export const CalendarGrid = ({
         <CalendarSkeleton />
       ) : (
         <div
-          className="grid grid-cols-7 gap-2 flex-1 min-h-0"
+          className="grid grid-cols-7 gap-3 flex-1 min-h-0"
           style={{ gridTemplateRows: `repeat(${weeksCount}, minmax(0, 1fr))` }}
         >
           {/* Espaços vazios antes do primeiro dia */}
           {Array.from({ length: firstDayIndex }).map((_, index) => (
-            <div key={`empty-${index}`} className="rounded-[10px] opacity-30" />
+            <div key={`empty-${index}`} className="rounded-xl opacity-20 bg-black/10" />
           ))}
 
           {/* Dias reais */}
@@ -146,6 +146,8 @@ export const CalendarGrid = ({
               return (SHIFT_ORDER[nameA] ?? 99) - (SHIFT_ORDER[nameB] ?? 99);
             });
 
+            const hasAbsenceInDay = dayShifts.some((s) => s.hasAbsence);
+
             return (
               <div
                 key={day}
@@ -156,7 +158,7 @@ export const CalendarGrid = ({
                 onKeyDown={(e) => e.key === "Enter" && setExpandedDay(day)}
                 onMouseEnter={() => onDayHover?.(day)}
                 onMouseLeave={() => onDayHover?.(null)}
-                className="rounded-[10px] border py-1.5 px-2 flex flex-col overflow-hidden cursor-pointer select-none outline-none"
+                className="rounded-xl border p-2.5 flex flex-col overflow-hidden cursor-pointer select-none outline-none min-h-[110px]"
                 style={{
                   backgroundColor: isToday
                     ? "var(--color-accent-subtle)"
@@ -166,22 +168,22 @@ export const CalendarGrid = ({
                     : currentHoliday
                     ? "var(--color-warning)"
                     : "var(--color-border-subtle)",
-                  transition: "box-shadow 150ms ease-out, transform 150ms ease-out, border-color 150ms ease-out",
+                  transition: "all 150ms ease-out",
                 }}
                 onMouseOver={(e) => {
                   (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-md)";
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+                  (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
                 }}
                 onMouseOut={(e) => {
                   (e.currentTarget as HTMLElement).style.boxShadow = "none";
                   (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
                 }}
               >
-                {/* Topo: número do dia e identificação */}
-                <div className="flex items-center justify-between mb-1 shrink-0">
-                  <div className="flex items-center gap-1.5 overflow-hidden">
+                {/* Topo: número do dia, feriado e badge de ausência */}
+                <div className="flex items-center justify-between mb-2 shrink-0">
+                  <div className="flex items-center gap-2 overflow-hidden">
                     <div
-                      className="w-6 h-6 shrink-0 rounded-md flex items-center justify-center text-[12px] font-bold"
+                      className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center text-sm font-bold"
                       style={{
                         backgroundColor: isToday
                           ? "var(--color-accent)"
@@ -197,7 +199,7 @@ export const CalendarGrid = ({
                     </div>
                     {currentHoliday && !isToday && (
                       <span
-                        className="text-[9px] font-semibold truncate max-w-[55px]"
+                        className="text-[11px] font-semibold truncate max-w-[70px]"
                         style={{ color: "var(--color-warning)" }}
                         title={currentHoliday.name}
                       >
@@ -205,20 +207,21 @@ export const CalendarGrid = ({
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    {/* Badge de ausências */}
-                    {dayShifts.some((s) => s.hasAbsence) && (
-                      <span
+
+                  <div className="flex items-center gap-1.5">
+                    {/* Badge de ausências refatorado para alto destaque visual */}
+                    {hasAbsenceInDay && (
+                      <div
                         title={`${dayShifts.flatMap((s) => s.absences).length} ausência(s) neste dia`}
-                        className="w-4 h-4 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: "var(--color-warning-subtle)", color: "var(--color-warning)" }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-red-500/15 text-red-400 border border-red-500/30 text-[10px] font-bold tracking-wider animate-pulse"
                       >
-                        <Palmtree size={9} strokeWidth={2.5} />
-                      </span>
+                        <UserX size={11} strokeWidth={2.5} />
+                        <span>AUSENTE</span>
+                      </div>
                     )}
                     {isToday && (
                       <div
-                        className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-[3px]"
+                        className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md"
                         style={{
                           backgroundColor: "var(--color-accent-dim)",
                           color: "var(--color-accent-text)",
@@ -230,9 +233,9 @@ export const CalendarGrid = ({
                   </div>
                 </div>
 
-                {/* Turnos do dia */}
+                {/* Turnos do dia - Tipografia ampliada para melhor leitura */}
                 <div
-                  className="flex flex-col gap-[3px] flex-1 overflow-y-auto"
+                  className="flex flex-col gap-1.5 flex-1 overflow-y-auto"
                   style={{ scrollbarWidth: "none" }}
                 >
                   {dayShifts.map((shift) => {
@@ -243,30 +246,30 @@ export const CalendarGrid = ({
                     return (
                       <div
                         key={shift.id}
-                        className={`rounded-[5px] border px-1.5 py-[3px] shrink-0 ${style.card}`}
+                        className={`rounded-lg border px-2 py-1 shrink-0 ${style.card}`}
                         style={{
                           opacity: isFaded ? 0.3 : 1,
                           filter: isFaded ? "grayscale(1)" : "none",
                           transition: "opacity 250ms ease-out, filter 250ms ease-out",
                         }}
                       >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className={`text-[9px] font-semibold px-1 py-[1px] rounded-[3px] whitespace-nowrap ${style.badge}`}>
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${style.badge}`}>
                             {style.label}
                           </span>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             {shift.isSwapped && (
                               <span
                                 title={shift.swappedWithUserName ? `Trocado com ${shift.swappedWithUserName}` : "Turno trocado"}
-                                className="w-3 h-3 rounded-full flex items-center justify-center"
+                                className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
                                 style={{ backgroundColor: "var(--color-accent-dim)", color: "var(--color-accent)" }}
                               >
-                                <ArrowLeftRight size={7} strokeWidth={2.5} />
+                                <ArrowLeftRight size={10} strokeWidth={2.5} />
                               </span>
                             )}
                             <span
-                              className="text-[10px] font-bold whitespace-nowrap"
-                              style={{ color: isFaded ? "var(--color-text-faint)" : "var(--color-text-muted)" }}
+                              className="text-xs font-extrabold whitespace-nowrap"
+                              style={{ color: isFaded ? "var(--color-text-faint)" : "var(--color-text)" }}
                             >
                               Eq. {teamName}
                             </span>
@@ -278,7 +281,7 @@ export const CalendarGrid = ({
 
                   {dayShifts.length === 0 && (
                     <div
-                      className="text-center text-[10px] py-1"
+                      className="text-center text-xs py-2 font-medium flex items-center justify-center flex-1"
                       style={{ color: currentHoliday ? "var(--color-warning)" : "var(--color-text-faint)" }}
                     >
                       Sem escala
@@ -321,7 +324,7 @@ export const CalendarGrid = ({
             <div
               className="absolute inset-0"
               style={{
-                backgroundColor: "oklch(5% 0 0 / 50%)",
+                backgroundColor: "oklch(5% 0 0 / 60%)",
                 backdropFilter: "blur(4px)",
               }}
               onClick={() => setExpandedDay(null)}
@@ -329,11 +332,10 @@ export const CalendarGrid = ({
 
             {/* Modal */}
             <div
-              className="relative w-full max-w-[340px] rounded-2xl p-6"
+              className="relative w-full max-w-[380px] rounded-2xl p-6 shadow-2xl"
               style={{
                 backgroundColor: "var(--color-surface)",
                 border: "1px solid var(--color-border)",
-                boxShadow: "var(--shadow-lg)",
                 animation: "modal-enter 200ms var(--ease-out-expo) both",
               }}
             >
@@ -346,7 +348,7 @@ export const CalendarGrid = ({
 
               <button
                 onClick={() => setExpandedDay(null)}
-                className="absolute top-4 right-4 p-1.5 rounded-full transition-colors duration-120"
+                className="absolute top-4 right-4 p-2 rounded-full transition-colors duration-150"
                 aria-label="Fechar"
                 style={{ color: "var(--color-text-faint)" }}
                 onMouseEnter={(e) => {
@@ -358,13 +360,13 @@ export const CalendarGrid = ({
                   (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)";
                 }}
               >
-                <X size={18} strokeWidth={2} />
+                <X size={20} strokeWidth={2} />
               </button>
 
               {/* Cabeçalho do modal */}
               <div className="flex items-center gap-4 mb-6">
                 <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold"
+                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 shadow-sm"
                   style={{
                     backgroundColor: isTodayModal
                       ? "var(--color-accent)"
@@ -376,17 +378,17 @@ export const CalendarGrid = ({
                 >
                   {expandedDay}
                 </div>
-                <div>
+                <div className="overflow-hidden">
                   <h3
-                    className="text-[16px] font-semibold capitalize flex items-center gap-1.5"
+                    className="text-lg font-bold capitalize flex items-center gap-2 truncate"
                     style={{ color: "var(--color-text)" }}
                   >
                     {diaDaSemana}
                     {modalHoliday && (
-                      <PartyPopper size={14} style={{ color: "var(--color-warning)" }} />
+                      <PartyPopper size={16} style={{ color: "var(--color-warning)" }} className="shrink-0" />
                     )}
                   </h3>
-                  <p className="text-[13px] mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                  <p className="text-sm mt-0.5 truncate" style={{ color: "var(--color-text-muted)" }}>
                     {isTodayModal ? (
                       <span style={{ color: "var(--color-accent)", fontWeight: 600 }}>Hoje</span>
                     ) : modalHoliday ? (
@@ -410,7 +412,7 @@ export const CalendarGrid = ({
                   return (
                     <div
                       key={shift.id}
-                      className={`rounded-xl border px-4 py-3 ${style.card}`}
+                      className={`rounded-xl border px-4 py-3.5 ${style.card}`}
                       style={{
                         opacity: isFaded ? 0.3 : 1,
                         filter: isFaded ? "grayscale(1)" : "none",
@@ -418,11 +420,11 @@ export const CalendarGrid = ({
                       }}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap ${style.badge}`}>
+                        <span className={`text-xs font-bold px-3 py-1 rounded-lg whitespace-nowrap ${style.badge}`}>
                           {style.label}
                         </span>
                         <span
-                          className="text-[14px] font-bold"
+                          className="text-base font-extrabold"
                           style={{ color: isFaded ? "var(--color-text-faint)" : "var(--color-text)" }}
                         >
                           Equipe {teamName}
@@ -431,11 +433,11 @@ export const CalendarGrid = ({
                       {/* Indicador de turno trocado */}
                       {shift.isSwapped && (
                         <div
-                          className="flex items-center gap-1.5 mt-2 pt-2"
+                          className="flex items-center gap-2 mt-2.5 pt-2.5"
                           style={{ borderTop: "1px dashed var(--color-accent-dim)" }}
                         >
-                          <ArrowLeftRight size={11} style={{ color: "var(--color-accent)" }} />
-                          <span className="text-[11px] font-semibold" style={{ color: "var(--color-accent-text)" }}>
+                          <ArrowLeftRight size={14} style={{ color: "var(--color-accent)" }} />
+                          <span className="text-xs font-bold" style={{ color: "var(--color-accent-text)" }}>
                             Turno trocado
                             {shift.swappedWithUserName
                               ? ` com ${shift.swappedWithUserName}`
@@ -449,10 +451,10 @@ export const CalendarGrid = ({
 
                 {modalShifts.length === 0 && (
                   <div
-                    className="text-center py-6 rounded-xl"
+                    className="text-center py-8 rounded-xl"
                     style={{ backgroundColor: "var(--color-surface-dim)" }}
                   >
-                    <p className="text-[13px]" style={{ color: "var(--color-text-faint)" }}>
+                    <p className="text-sm font-medium" style={{ color: "var(--color-text-faint)" }}>
                       Nenhuma escala atribuída.
                     </p>
                   </div>
@@ -468,26 +470,26 @@ export const CalendarGrid = ({
                   if (unique.length === 0) return null;
                   return (
                     <div
-                      className="rounded-xl p-4 mt-1"
+                      className="rounded-xl p-4 mt-2"
                       style={{
                         backgroundColor: "var(--color-warning-subtle)",
                         border: "1px solid var(--color-warning)",
                       }}
                     >
-                      <div className="flex items-center gap-1.5 mb-3">
-                        <Palmtree size={14} style={{ color: "var(--color-warning)" }} />
-                        <h4 className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: "var(--color-warning)" }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <Palmtree size={16} style={{ color: "var(--color-warning)" }} />
+                        <h4 className="text-xs font-bold uppercase tracking-wider" style={{ color: "var(--color-warning)" }}>
                           Ausências do Dia ({unique.length})
                         </h4>
                       </div>
-                      <ul className="space-y-2">
+                      <ul className="space-y-2.5">
                         {unique.map((a) => (
-                          <li key={a.absenceId} className="text-[12px]" style={{ color: "var(--color-text-muted)" }}>
-                            <span className="font-semibold" style={{ color: "var(--color-text)" }}>{a.userName}</span>
-                            {" — "}{a.typeDescription}
+                          <li key={a.absenceId} className="text-xs leading-relaxed" style={{ color: "var(--color-text-muted)" }}>
+                            <span className="font-bold text-sm block" style={{ color: "var(--color-text)" }}>{a.userName}</span>
+                            <span className="text-gray-400">{a.typeDescription}</span>
                             {a.substituteUserName && (
-                              <span className="text-[11px] ml-1" style={{ color: "var(--color-text-faint)" }}>
-                                (Cobertura: {a.substituteUserName})
+                              <span className="text-xs ml-1.5 font-medium px-1.5 py-0.5 rounded bg-black/20" style={{ color: "var(--color-warning)" }}>
+                                Cobertura: {a.substituteUserName}
                               </span>
                             )}
                           </li>
