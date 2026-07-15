@@ -13,6 +13,9 @@ import ProfilePage from "./features/profile/pages/ProfilePage";
 import NoticesPage from "./features/notices/pages/NoticesPage";
 import AbsencesPage from "./features/absences/pages/AbsencesPage";
 import SwapRequestsPage from "./features/swap-requests/pages/SwapRequestsPage";
+import KnowledgeBasePage from "./features/knowledge-base/pages/KnowledgeBasePage";
+import ArticleViewPage from "./features/knowledge-base/pages/ArticleViewPage";
+import ArticleEditorPage from "./features/knowledge-base/pages/ArticleEditorPage";
 import AdminPage from "./features/admin/pages/AdminPage";
 import HomePage from "./features/home/page/HomePage";
 
@@ -60,6 +63,10 @@ export default function App() {
             <Route path="/users"           element={<UsersPage />} />
             <Route path="/ausencias"       element={<AbsencesPage />} />
             <Route path="/trocas"          element={<SwapRequestsPage />} />
+            <Route path="/base-conhecimento" element={<KnowledgeBasePage />} />
+            <Route path="/base-conhecimento/novo" element={<ArticleEditorPage />} />
+            <Route path="/base-conhecimento/:id" element={<ArticleViewPage />} />
+            <Route path="/base-conhecimento/:id/editar" element={<ArticleEditorPage />} />
             <Route path="/administracao"   element={<AdminPage />} />
             <Route path="/configuracoes"   element={<SettingsPage />} />
             <Route path="/perfil"          element={<ProfilePage />} />

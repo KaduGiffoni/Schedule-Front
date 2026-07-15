@@ -4,6 +4,7 @@ import { useHasRole } from "../../lib/useHasRole";
 import {
   LayoutDashboard,
   ArrowLeftRight,
+  BookOpen,
   Settings,
   HelpCircle,
   Users,
@@ -42,6 +43,7 @@ export const Sidebar = () => {
         { icon: Megaphone,       label: "Mural e Plantão",  path: "/comunicacao" },
         { icon: ArrowLeftRight,  label: "Trocas de Turno",  path: "/trocas" },
         { icon: CalendarOff,     label: "Ausências",         path: "/ausencias" },
+        { icon: BookOpen,        label: "Base de Conhecimento", path: "/base-conhecimento" },
       ],
     },
     // Grupo "Gestão" só aparece para Admin/Manager
