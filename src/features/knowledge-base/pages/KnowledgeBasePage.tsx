@@ -7,9 +7,11 @@ import {
   Eye,
   Folder,
   Heart,
+  Image,
   Loader2,
   Plus,
   Search,
+  Settings,
   Tag as TagIcon,
   X,
   CheckCircle2,
@@ -108,7 +110,7 @@ const CategoryNode = ({
   onSelect: (id: string | null) => void;
 }) => {
   const [open, setOpen] = useState(depth === 0);
-  const hasChildren = node.children.length > 0;
+  const hasChildren = (node.children ?? []).length > 0;
   const isSelected = selectedId === node.id;
 
   return (
@@ -151,7 +153,7 @@ const CategoryNode = ({
 
       {hasChildren && open && (
         <div>
-          {node.children.map((child) => (
+          {(node.children ?? []).map((child) => (
             <CategoryNode
               key={child.id}
               node={child}
@@ -228,9 +230,9 @@ const ArticleCard = ({
         )}
 
         {/* Tags */}
-        {article.tags.length > 0 && (
+        {(article.tags ?? []).length > 0 && (
           <div className="flex flex-wrap gap-1.5">
-            {article.tags.slice(0, 3).map((tag) => (
+            {(article.tags ?? []).slice(0, 3).map((tag) => (
               <span
                 key={tag.id}
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-surface-dim)] text-[var(--color-text-faint)]"
@@ -239,9 +241,9 @@ const ArticleCard = ({
                 {tag.name}
               </span>
             ))}
-            {article.tags.length > 3 && (
+            {(article.tags ?? []).length > 3 && (
               <span className="text-[10px] text-[var(--color-text-faint)] self-center">
-                +{article.tags.length - 3}
+                +{(article.tags ?? []).length - 3}
               </span>
             )}
           </div>
@@ -617,6 +619,20 @@ export default function KnowledgeBasePage() {
               <X size={12} />
               Limpar filtros
             </button>
+          )}
+
+          {/* Configurações — só para Editor/Administrator */}
+          {canCreate && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate('/base-conhecimento/configuracoes')}
+              className="shrink-0"
+              title="Gerir Tags e Categorias"
+            >
+              <Settings size={15} />
+              Configurações
+            </Button>
           )}
 
           {/* Novo artigo — só para Editor/Administrator */}

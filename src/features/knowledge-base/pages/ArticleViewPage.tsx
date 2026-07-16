@@ -427,9 +427,9 @@ export default function ArticleViewPage() {
           </div>
 
           {/* Tags */}
-          {article.tags.length > 0 && (
+          {(article.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-2 mb-8">
-              {article.tags.map((tag) => (
+              {(article.tags ?? []).map((tag) => (
                 <span
                   key={tag.id}
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold transition-colors"
@@ -449,11 +449,8 @@ export default function ArticleViewPage() {
         {/* ── Conteúdo do artigo (HTML do TipTap) ──────────────────────────── */}
         <div className="max-w-[860px] mx-auto px-8 pb-8">
           <div
-            className="article-content prose prose-sm max-w-none"
-            style={{ color: 'var(--color-text)' }}
-            // RB004: o conteúdo é HTML gerado pelo TipTap — renderizamos como dangerouslySetInnerHTML
-            // O backend é responsável pela sanitização (FluentValidation + backend logic).
-            dangerouslySetInnerHTML={{ __html: article.content }}
+            className="prose prose-sm max-w-none text-[var(--color-text)]"
+            dangerouslySetInnerHTML={{ __html: article.content ?? '' }}
           />
         </div>
 
@@ -698,7 +695,7 @@ export default function ArticleViewPage() {
         </div>
 
         {/* ── Artigos Relacionados (RB030 — cruzamento de Tags) ────────────── */}
-        {article.relatedArticles && article.relatedArticles.length > 0 && (
+        {(article.relatedArticles ?? []).length > 0 && (
           <>
             <div className="h-px w-full" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
             <div>
@@ -706,7 +703,7 @@ export default function ArticleViewPage() {
                 Artigos Relacionados
               </p>
               <div className="flex flex-col gap-2">
-                {article.relatedArticles.map((related) => (
+                {(article.relatedArticles ?? []).map((related) => (
                   <RelatedCard
                     key={related.id}
                     article={related}

@@ -36,9 +36,11 @@ import { suggestion } from "./tiptap/suggestion";
 interface RichTextEditorProps {
   content: string;
   onChange: (value: string) => void;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
+export const RichTextEditor = ({ content, onChange, className, style }: RichTextEditorProps) => {
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -156,13 +158,17 @@ export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
 
   return (
     <div
+      className={className}
       style={{
         width: "100%",
+        display: "flex",
+        flexDirection: "column",
         border: "1px solid var(--color-border)",
         borderRadius: "10px",
         overflow: "hidden",
         backgroundColor: "var(--color-surface)",
         boxShadow: "var(--shadow-sm)",
+        ...style
       }}
     >
       {/* TOOLBAR */}
@@ -292,8 +298,8 @@ export const RichTextEditor = ({ content, onChange }: RichTextEditorProps) => {
       </div>
 
       {/* EDITOR */}
-      <div style={{ backgroundColor: "var(--color-surface)" }}>
-        <EditorContent editor={editor} />
+      <div style={{ backgroundColor: "var(--color-surface)", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <EditorContent editor={editor} style={{ flex: 1, display: "flex", flexDirection: "column" }} className="h-full flex-1" />
       </div>
     </div>
   );
