@@ -1,22 +1,22 @@
 import { ReactRenderer } from "@tiptap/react";
+import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import tippy from "tippy.js";
-
-const users = [
-  "kadu",
-  "carlos",
-  "gilberto",
-  "wallace",
-  "juan",
-  "carol",
-];
+import { knowledgeBaseService } from "../../../features/knowledge-base/api/knowledgeBaseService";
+import type { ArticleSummary } from "../../../features/knowledge-base/types";
+import { FileText } from "lucide-react";
 
 export const suggestion = {
-  items: ({ query }: any) => {
-    return users
-      .filter((item) =>
-        item.toLowerCase().startsWith(query.toLowerCase()),
-      )
-      .slice(0, 5);
+  items: async ({ query }: { query: string }) => {
+    try {
+      const response = await knowledgeBaseService.articles.search({
+        searchTerm: query,
+        pageNumber: 1,
+        pageSize: 5,
+      });
+      return response.data;
+    } catch {
+      return [];
+    }
   },
 
   render: () => {
@@ -29,6 +29,10 @@ export const suggestion = {
           props,
           editor: props.editor,
         });
+
+        if (!props.clientRect) {
+          return;
+        }
 
         popup = tippy("body", {
           getReferenceClientRect: props.clientRect,
@@ -44,6 +48,10 @@ export const suggestion = {
       onUpdate(props: any) {
         component.updateProps(props);
 
+        if (!props.clientRect) {
+          return;
+        }
+
         popup[0].setProps({
           getReferenceClientRect: props.clientRect,
         });
@@ -52,7 +60,6 @@ export const suggestion = {
       onKeyDown(props: any) {
         if (props.event.key === "Escape") {
           popup[0].hide();
-
           return true;
         }
 
@@ -67,24 +74,86 @@ export const suggestion = {
   },
 };
 
-function MentionList(props: any) {
+const MentionList = forwardRef((props: any, ref) => {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const selectItem = (index: number) => {
+    const item = props.items[index];
+    if (item) {
+      props.command({ id: item.id, label: item.title });
+    }
+  };
+
+  const upHandler = () => {
+    setSelectedIndex((selectedIndex + props.items.length - 1) % props.items.length);
+  };
+
+  const downHandler = () => {
+    setSelectedIndex((selectedIndex + 1) % props.items.length);
+  };
+
+  const enterHandler = () => {
+    selectItem(selectedIndex);
+  };
+
+  useEffect(() => setSelectedIndex(0), [props.items]);
+
+  useImperativeHandle(ref, () => ({
+    onKeyDown: ({ event }: any) => {
+      if (event.key === "ArrowUp") {
+        upHandler();
+        return true;
+      }
+      if (event.key === "ArrowDown") {
+        downHandler();
+        return true;
+      }
+      if (event.key === "Enter") {
+        enterHandler();
+        return true;
+      }
+      return false;
+    },
+  }));
+
   return (
-    <div className="bg-white border border-gray-200 rounded shadow-lg overflow-hidden min-w-[180px]">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[8px] shadow-lg overflow-hidden min-w-[280px] text-[var(--color-text)]">
       {props.items.length ? (
-        props.items.map((item: string, index: number) => (
-          <button
-            key={index}
-            className="block w-full text-left px-3 py-2 hover:bg-gray-100 text-sm"
-            onClick={() => props.command({ id: item, label: item })}
+        props.items.map((item: ArticleSummary, index: number) => (
+          <div
+            key={item.id}
+            className="group relative"
+            onMouseEnter={() => setSelectedIndex(index)}
           >
-            @{item}
-          </button>
+            <button
+              className={`block w-full text-left px-3 py-2 text-[13px] transition-colors flex items-center gap-2 ${
+                index === selectedIndex
+                  ? "bg-[var(--color-surface-dim)]"
+                  : "bg-transparent"
+              }`}
+              onClick={() => selectItem(index)}
+            >
+              <FileText size={14} className="text-[var(--color-accent)]" />
+              <span className="truncate">{item.title}</span>
+            </button>
+            
+            {/* Tooltip Hover Lateral */}
+            {index === selectedIndex && item.summary && (
+              <div 
+                className="absolute left-full top-0 ml-2 w-64 p-3 bg-[var(--color-surface-dim)] border border-[var(--color-border)] rounded-[8px] shadow-xl text-[12px] text-[var(--color-text-muted)] z-[100]"
+                style={{ animation: 'fadeIn 150ms ease-out' }}
+              >
+                <div className="font-bold text-[var(--color-text)] mb-1">Resumo</div>
+                {item.summary}
+              </div>
+            )}
+          </div>
         ))
       ) : (
-        <div className="px-3 py-2 text-sm text-gray-500">
-          Nenhum usuário
+        <div className="px-3 py-2 text-[13px] text-[var(--color-text-faint)]">
+          Nenhum artigo encontrado
         </div>
       )}
     </div>
   );
-}
+});

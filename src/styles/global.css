@@ -183,8 +183,15 @@ body {
 }
 
 /* ── Seleção de texto ─── */
+/* Light mode: accent blue com 30% opacidade — visível sobre fundo branco */
 ::selection {
-  background-color: var(--color-accent-dim);
+  background-color: oklch(42% 0.18 260 / 30%);
+  color: var(--color-text);
+}
+
+/* Dark mode: accent blue mais intenso (fundo escuro precisa de mais opacidade) */
+.dark ::selection {
+  background-color: oklch(62% 0.18 258 / 40%);
   color: var(--color-text);
 }
 
@@ -258,16 +265,122 @@ body {
   font-size: 0.875em;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   PROSEMIRROR EDITOR — estilos que só se aplicam ao editor ativo
+   (não afetam a renderização estática da ArticleViewPage)
+   ───────────────────────────────────────────────────────────── */
+
+/* Seleção dentro do editor ProseMirror — precisa de especificidade maior */
+.ProseMirror ::selection,
+.kb-editor-prose ::selection {
+  background-color: oklch(42% 0.18 260 / 35%);
+  color: inherit;
+}
+
+.dark .ProseMirror ::selection,
+.dark .kb-editor-prose ::selection {
+  background-color: oklch(62% 0.18 258 / 45%);
+  color: inherit;
+}
+
+/* Listas com marcadores/números visíveis.
+   Tailwind v4 reseta list-style por padrão — restauramos aqui. */
+.ProseMirror ul,
+.kb-editor-prose ul {
+  list-style-type: disc;
+  padding-left: 1.75em;
+  margin: 0.5em 0;
+}
+
+.ProseMirror ol,
+.kb-editor-prose ol {
+  list-style-type: decimal;
+  padding-left: 1.75em;
+  margin: 0.5em 0;
+}
+
+.ProseMirror li,
+.kb-editor-prose li {
+  display: list-item;
+  margin-bottom: 0.25em;
+  line-height: 1.65;
+}
+
+.ProseMirror li > p,
+.kb-editor-prose li > p {
+  margin: 0;
+}
+
+/* Listas aninhadas */
+.ProseMirror ul ul,
+.ProseMirror ol ol,
+.ProseMirror ul ol,
+.ProseMirror ol ul {
+  margin: 0.25em 0;
+}
+
+.ProseMirror ul ul { list-style-type: circle; }
+.ProseMirror ul ul ul { list-style-type: square; }
+
+/* Separador horizontal */
+.ProseMirror hr {
+  border: none;
+  border-top: 2px solid var(--color-border);
+  margin: 1.5em 0;
+  border-radius: 9999px;
+}
+
+/* Placeholder de texto */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-text-faint);
+  pointer-events: none;
+  float: left;
+  height: 0;
+  white-space: pre-line;
+}
+
+/* Tabela resize handle */
+.ProseMirror .column-resize-handle {
+  background-color: var(--color-accent);
+  bottom: -2px;
+  pointer-events: none;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 3px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.ProseMirror:hover .column-resize-handle {
+  opacity: 0.5;
+}
+
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.ProseMirror .resize-cursor {
+  cursor: col-resize;
+}
+
 .ProseMirror table {
   border-collapse: collapse;
+  table-layout: fixed;
   width: 100%;
-  margin: 16px 0;
+  margin: 0;
+  overflow: hidden;
 }
 
 .ProseMirror td,
 .ProseMirror th {
   border: 1px solid var(--color-border);
   padding: 8px 12px;
+  position: relative;
+  vertical-align: top;
+  min-width: 60px;
 }
 
 .ProseMirror th {
@@ -279,12 +392,17 @@ body {
   color: var(--color-text-muted);
 }
 
-.ProseMirror p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  color: var(--color-text-faint);
+/* Célula selecionada na tabela */
+.ProseMirror .selectedCell::after {
+  background: oklch(42% 0.18 260 / 20%);
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   pointer-events: none;
-  float: left;
-  height: 0;
+  position: absolute;
+  z-index: 2;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -304,4 +422,242 @@ body {
     animation: none;
     background: var(--color-surface-dim);
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   KB — ANIMAÇÃO DE ENTRADA DOS CARDS (staggered reveal)
+   Protocolo: Premium Utilitarian Minimalism §7
+   ══════════════════════════════════════════════════════════════ */
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.kb-card-enter {
+  animation: card-enter 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: calc(var(--card-index, 0) * 60ms);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   KB — PROSE DO CONTEÚDO DO ARTIGO (.kb-content)
+   Override do Tailwind Typography com tokens do design system.
+   Protocolo: Premium Utilitarian Minimalism §3 + §4
+   ══════════════════════════════════════════════════════════════ */
+.kb-content {
+  color: var(--color-text);
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.kb-content h1,
+.kb-content h2,
+.kb-content h3,
+.kb-content h4 {
+  color: var(--color-text);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-top: 2em;
+  margin-bottom: 0.6em;
+}
+
+.kb-content h1 { font-size: 1.75rem; }
+.kb-content h2 { font-size: 1.375rem; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 0.35em; }
+.kb-content h3 { font-size: 1.125rem; }
+.kb-content h4 { font-size: 0.975rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
+
+.kb-content p {
+  margin-bottom: 1.1em;
+  color: var(--color-text);
+}
+
+.kb-content a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in oklch, var(--color-accent) 40%, transparent);
+  transition: text-decoration-color 150ms ease-out;
+}
+
+.kb-content a:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+.kb-content strong {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.kb-content em {
+  color: var(--color-text-muted);
+}
+
+.kb-content code {
+  font-family: var(--font-mono);
+  font-size: 0.8125em;
+  background-color: var(--color-surface-dim);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  padding: 0.15em 0.4em;
+  color: var(--color-accent-text);
+}
+
+.kb-content pre {
+  background-color: var(--color-surface-dim);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  margin-bottom: 1.25em;
+}
+
+.kb-content pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text);
+  font-size: inherit;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TERMINAL CODE BLOCK — visualização estática (ArticleViewPage)
+   O editor usa o React NodeView; aqui usamos CSS puro para a
+   versão HTML serializada pelo renderHTML do TerminalCodeBlock.
+   ══════════════════════════════════════════════════════════════ */
+
+/* Override do pre genérico para blocos de terminal */
+.kb-content pre.kb-terminal-pre {
+  background-color: #0a0a0a;
+  border-color: rgba(74, 222, 128, 0.3);
+  color: #4ade80;
+  position: relative;
+  padding: 1rem;
+}
+
+/* Override do code genérico para terminais */
+.kb-content pre.kb-terminal-pre code.kb-terminal-code {
+  color: #4ade80;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  display: block;
+}
+
+/* Prefixo "> " em cada linha via ::before.
+   O ArticleViewPage envolve cada linha em <span class="kb-terminal-line">. */
+.kb-content .kb-terminal-line::before {
+  content: '> ';
+  color: #4ade80;
+  opacity: 0.5;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Botão copiar injetado via useEffect na visualização estática */
+.kb-copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #4ade80;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms ease, background-color 150ms ease;
+  padding: 0;
+}
+
+.kb-content pre.kb-terminal-pre:hover .kb-copy-btn {
+  opacity: 1;
+}
+
+.kb-copy-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.kb-content ::selection {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: inherit;
+}
+
+.kb-no-spinners::-webkit-outer-spin-button,
+.kb-no-spinners::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.kb-no-spinners {
+  -moz-appearance: textfield;
+}
+
+.kb-content blockquote {
+  border-left: 3px solid var(--color-accent);
+  margin-left: 0;
+  padding: 0.5em 0 0.5em 1.25em;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.kb-content ul,
+.kb-content ol {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+
+.kb-content li {
+  margin-bottom: 0.35em;
+  line-height: 1.65;
+}
+
+.kb-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.25em;
+  font-size: 0.9rem;
+}
+
+.kb-content th {
+  background: var(--color-surface-dim);
+  font-weight: 700;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.kb-content td {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.kb-content tr:nth-child(even) td {
+  background-color: color-mix(in oklch, var(--color-surface-dim) 50%, transparent);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   TRANSITION UTILITIES — KB
+   Facilita uso consistente dos easings definidos nos tokens
+   ══════════════════════════════════════════════════════════════ */
+.kb-transition-border {
+  transition: border-color 150ms var(--ease-out-expo),
+              box-shadow 150ms var(--ease-out-expo);
 }

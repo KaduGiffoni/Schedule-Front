@@ -6,7 +6,9 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   FileText,
   Folder,
@@ -23,7 +25,10 @@ import { knowledgeBaseService } from '../api/knowledgeBaseService';
 import {
   ArticleStatus,
   ARTICLE_STATUS_LABELS,
+  DifficultyLevel,
+  DIFFICULTY_LABELS,
   type ArticleStatusType,
+  type DifficultyLevelType,
   type ArticleDetail,
   type CategoryTreeNode,
   type Tag,
@@ -32,6 +37,8 @@ import {
 } from '../types';
 import { Button } from '../../../components/ui/Button';
 import { RichTextEditor } from '../../../components/ui/RichTextEditor';
+import { TagCombobox } from '../../../components/ui/TagCombobox';
+import { HelpTooltip } from '../../../components/ui/HelpTooltip';
 import { useToastStore } from '../../../lib/toastStore';
 import { useHasRole } from '../../../lib/useHasRole';
 
@@ -64,13 +71,18 @@ function flattenTree(nodes: CategoryTreeNode[], depth = 0): { id: string; label:
 
 interface FormState {
   title: string;
-  excerpt: string;
+  // RB009: campo renomeado para "summary" (alinhado ao DTO do backend)
+  summary: string;
   content: string;
   categoryId: string;
   tagIds: string[];
   status: ArticleStatusType;
+  // RB023: nível de dificuldade obrigatório (DifficultyLevel.cs: Basic=1, Intermediate=2, Advanced=3)
+  difficulty: DifficultyLevelType;
   coverImageUrl: string;
-  estimatedReadingTimeMinutes: string;
+  // RB023: campo renomeado para "estimatedTimeInMinutes" (alinhado ao DTO do backend)
+  estimatedTimeInMinutes: string;
+  // RB020: obrigatório em TODA edição (o validator do backend exige NotEmpty)
   changeDescription: string;
 }
 
@@ -78,33 +90,79 @@ type FormErrors = Partial<Record<keyof FormState, string>>;
 
 const INITIAL_FORM: FormState = {
   title: '',
-  excerpt: '',
+  summary: '',       // RB009
   content: '',
   categoryId: '',
   tagIds: [],
   status: ArticleStatus.Draft,
+  difficulty: DifficultyLevel.Basic, // RB023
   coverImageUrl: '',
-  estimatedReadingTimeMinutes: '',
-  changeDescription: '',
+  estimatedTimeInMinutes: '',  // RB023
+  changeDescription: '',       // RB020
 };
+
+// RB019: domínios de vídeo permitidos: YouTube, SharePoint e Microsoft Stream
+const ALLOWED_VIDEO_DOMAINS = [
+  'youtube.com',
+  'youtu.be',
+  'sharepoint.com',
+  'microsoftstream.com',
+  'stream.microsoft.com',
+];
+
+/** RB019: valida se uma URL de vídeo aponta para domínio permitido */
+function isAllowedVideoUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return ALLOWED_VIDEO_DOMAINS.some((d) => hostname === d || hostname.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * RB019: extrai hrefs de todos os links no conteúdo HTML gerado pelo TipTap
+ * e verifica se há URLs de vídeo (com extensões típicas ou parâmetros de embed)
+ * apontando para domínios não permitidos.
+ */
+function validateVideoLinks(htmlContent: string): string | null {
+  // Busca atributos href que contenham padrões de URL de vídeo
+  const hrefMatches = htmlContent.matchAll(/href="([^"]+)"/gi);
+  const videoPatterns = /(?:youtube|youtu\.be|vimeo|dailymotion|twitch|stream|video)/i;
+  for (const match of hrefMatches) {
+    const url = match[1];
+    if (videoPatterns.test(url) && !isAllowedVideoUrl(url)) {
+      return `Link de vídeo não permitido detectado. Use apenas YouTube, SharePoint ou Microsoft Stream. URL: ${url}`;
+    }
+  }
+  return null;
+}
 
 function validate(form: FormState, isEdit: boolean): FormErrors {
   const errors: FormErrors = {};
+  // RB008: título obrigatório, máx 150 chars
   if (!form.title.trim()) errors.title = 'O título é obrigatório.';
   else if (form.title.length > 150) errors.title = 'Máximo 150 caracteres.';
-  if (!form.excerpt.trim()) errors.excerpt = 'O resumo é obrigatório.';
+  // RB009: resumo obrigatório
+  if (!form.summary.trim()) errors.summary = 'O resumo é obrigatório.';
   if (!form.content || form.content === '<p></p>' || !form.content.trim())
     errors.content = 'O conteúdo é obrigatório.';
+  // RB010: categoria obrigatória
   if (!form.categoryId) errors.categoryId = 'Selecione uma categoria.';
+  // RB011: mínimo 1 tag
   if (form.tagIds.length === 0) errors.tagIds = 'Selecione pelo menos uma tag.';
-  if (
-    form.estimatedReadingTimeMinutes &&
-    (isNaN(Number(form.estimatedReadingTimeMinutes)) ||
-      Number(form.estimatedReadingTimeMinutes) < 1)
-  )
-    errors.estimatedReadingTimeMinutes = 'Informe um número válido (≥ 1).';
-  if (isEdit && form.status === ArticleStatus.Published && !form.changeDescription.trim())
-    errors.changeDescription = 'Descreva a alteração para o log de auditoria.';
+  // RB023: tempo estimado obrigatório e válido
+  if (!form.estimatedTimeInMinutes || form.estimatedTimeInMinutes === '') {
+    errors.estimatedTimeInMinutes = 'O tempo estimado é obrigatório.';
+  } else if (isNaN(Number(form.estimatedTimeInMinutes)) || Number(form.estimatedTimeInMinutes) < 1) {
+    errors.estimatedTimeInMinutes = 'Informe um número válido (≥ 1).';
+  }
+  // RB020: changeDescription obrigatório em TODA edição (o backend exige NotEmpty())
+  if (isEdit && !form.changeDescription.trim())
+    errors.changeDescription = 'Descreva a alteração para o log de auditoria (obrigatório em toda edição).';
+  // RB019: validar URLs de vídeo no conteúdo
+  const videoError = validateVideoLinks(form.content);
+  if (videoError) errors.content = videoError;
   return errors;
 }
 
@@ -418,6 +476,7 @@ export default function ArticleEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const showToast = useToastStore((s) => s.showToast);
+  // RB002/RB003: só Admin ou Manager podem criar/editar artigos
   const canEdit = useHasRole('Admin', 'Manager');
 
   const isEdit = Boolean(id);
@@ -468,6 +527,7 @@ export default function ArticleEditorPage() {
   }, [showToast]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadMeta();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -481,14 +541,15 @@ export default function ArticleEditorPage() {
         const data: ArticleDetail = await knowledgeBaseService.articles.getById(id);
         setForm({
           title: data.title,
-          excerpt: data.excerpt ?? '',
+          summary: data.summary ?? '',          // RB009: campo "summary" do backend
           content: data.content,
           categoryId: data.category?.id ?? '',
           tagIds: (data.tags ?? []).map((t) => t.id),
           status: data.status,
+          difficulty: data.difficulty ?? DifficultyLevel.Basic, // RB023
           coverImageUrl: data.coverImageUrl ?? '',
-          estimatedReadingTimeMinutes: data.estimatedReadingTimeMinutes?.toString() ?? '',
-          changeDescription: '',
+          estimatedTimeInMinutes: data.estimatedTimeInMinutes?.toString() ?? '', // RB023
+          changeDescription: '',   // RB020: sempre limpar ao abrir o editor
         });
         setSlugPreview(data.slug);
         setSlugManual(true);
@@ -508,6 +569,7 @@ export default function ArticleEditorPage() {
 
   // ── Auto-slug ────────────────────────────────────────────────────────────────
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!slugManual) setSlugPreview(generateSlug(form.title));
   }, [form.title, slugManual]);
 
@@ -519,9 +581,6 @@ export default function ArticleEditorPage() {
     },
     [errors],
   );
-
-  const toggleTag = (tagId: string) =>
-    set('tagIds', form.tagIds.includes(tagId) ? form.tagIds.filter((t) => t !== tagId) : [...form.tagIds, tagId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -538,16 +597,15 @@ export default function ArticleEditorPage() {
         const payload: UpdateKnowledgeArticleRequest = {
           id,
           title: form.title,
-          excerpt: form.excerpt,
+          summary: form.summary,             // RB009: campo correto do backend
           content: form.content,
           categoryId: form.categoryId,
           tagIds: form.tagIds,
           status: form.status,
-          estimatedReadingTimeMinutes: form.estimatedReadingTimeMinutes
-            ? Number(form.estimatedReadingTimeMinutes)
-            : undefined,
+          difficulty: form.difficulty,        // RB023: campo obrigatório
+          estimatedTimeInMinutes: Number(form.estimatedTimeInMinutes) || 1, // RB023
           coverImageUrl: form.coverImageUrl || undefined,
-          changeDescription: form.changeDescription || undefined,
+          changeDescription: form.changeDescription, // RB020: obrigatório em toda edição
         };
         await knowledgeBaseService.articles.update(payload);
         showToast('Artigo atualizado! Nova versão criada.', 'success');
@@ -555,14 +613,13 @@ export default function ArticleEditorPage() {
       } else {
         const payload: CreateKnowledgeArticleRequest = {
           title: form.title,
-          excerpt: form.excerpt,
+          summary: form.summary,              // RB009: campo correto do backend
           content: form.content,
           categoryId: form.categoryId,
           tagIds: form.tagIds,
           status: form.status,
-          estimatedReadingTimeMinutes: form.estimatedReadingTimeMinutes
-            ? Number(form.estimatedReadingTimeMinutes)
-            : undefined,
+          difficulty: form.difficulty,         // RB023: campo obrigatório
+          estimatedTimeInMinutes: Number(form.estimatedTimeInMinutes) || 1, // RB023
           coverImageUrl: form.coverImageUrl || undefined,
         };
         const created = await knowledgeBaseService.articles.create(payload);
@@ -708,39 +765,45 @@ export default function ArticleEditorPage() {
           </div>
 
           {/* Ações */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              disabled={isSaving}
-              className="flex items-center gap-1.5 h-8 px-3 rounded-[7px] text-[12px] font-semibold transition-all"
-              style={{
-                backgroundColor: 'var(--color-surface-dim)',
-                border: '1px solid var(--color-border)',
-                color: 'var(--color-text-muted)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-surface-raised)';
-                e.currentTarget.style.color = 'var(--color-text)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--color-surface-dim)';
-                e.currentTarget.style.color = 'var(--color-text-muted)';
-              }}
-            >
-              <Save size={13} />
-              Rascunho
-            </button>
-            <Button
-              type="submit"
-              form="kb-editor-form"
-              size="sm"
-              disabled={isSaving || isLoadingMeta}
-              isLoading={isSaving}
-            >
-              <Send size={13} />
-              {isEdit ? 'Publicar Edição' : 'Publicar Artigo'}
-            </Button>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSaving}
+                className="flex items-center gap-1.5 h-8 px-3 rounded-[7px] text-[12px] font-semibold transition-all"
+                style={{
+                  backgroundColor: 'var(--color-surface-dim)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text-muted)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--color-surface-raised)';
+                  e.currentTarget.style.color = 'var(--color-text)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--color-surface-dim)';
+                  e.currentTarget.style.color = 'var(--color-text-muted)';
+                }}
+              >
+                <Save size={13} />
+                Rascunho
+              </button>
+              <HelpTooltip content="Salva o artigo como rascunho. Ele fica visível apenas para Editores e Administradores." align="right" />
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                type="submit"
+                form="kb-editor-form"
+                size="sm"
+                disabled={isSaving || isLoadingMeta}
+                isLoading={isSaving}
+              >
+                <Send size={13} />
+                {isEdit ? 'Publicar Edição' : 'Publicar Artigo'}
+              </Button>
+              <HelpTooltip content="Publica o artigo imediatamente, tornando-o visível para todos." align="right" />
+            </div>
           </div>
         </div>
 
@@ -752,12 +815,12 @@ export default function ArticleEditorPage() {
             id="kb-editor-form"
             onSubmit={handleSubmit}
             noValidate
-            className="flex-1 flex overflow-hidden"
+            className={`flex-1 flex overflow-hidden transition-opacity duration-300 ${isSaving ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}
           >
 
             {/* ── COLUNA PRINCIPAL ─────────────────────────────────────── */}
             <div className="flex-1 overflow-y-auto">
-              <div className="max-w-[820px] mx-auto px-10 py-10">
+              <div className="max-w-4xl mx-auto px-10 py-10">
 
                 {/* Título — estilo Confluence: grande, limpo */}
                 <div className="mb-6">
@@ -791,7 +854,7 @@ export default function ArticleEditorPage() {
                       <FieldError message={errors.title} />
                     ) : (
                       <div
-                        className="flex items-center gap-1.5 text-[11px] font-mono"
+                        className="flex items-center gap-1.5 text-[14px] font-mono"
                         style={{ color: 'var(--color-text-faint)', opacity: 0.7 }}
                       >
                         <span style={{ opacity: 0.5 }}>/base-conhecimento/</span>
@@ -811,59 +874,56 @@ export default function ArticleEditorPage() {
                   <div className="mt-4 mb-6" style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
                 </div>
 
-                {/* Resumo */}
+                {/* Resumo — RB009 */}
                 <div className="mb-6">
                   <SectionLabel required>Resumo</SectionLabel>
                   <textarea
-                    id="kb-excerpt"
-                    value={form.excerpt}
-                    onChange={(e) => set('excerpt', e.target.value)}
+                    id="kb-summary"
+                    value={form.summary}
+                    onChange={(e) => set('summary', e.target.value)}
                     placeholder="Descreva em 1-3 frases o que este artigo ensina. Aparece nos resultados de pesquisa."
                     rows={2}
-                    className="w-full px-3 py-2.5 text-[14px] rounded-[8px] resize-none focus:outline-none transition-colors"
+                    className="w-full px-3 py-2.5 text-[14px] rounded-[8px] resize-none focus:outline-none kb-transition-border"
                     style={{
                       backgroundColor: 'var(--color-surface)',
-                      border: `1px solid ${errors.excerpt ? 'var(--color-error)' : 'var(--color-border)'}`,
+                      border: `1px solid ${errors.summary ? 'var(--color-error)' : 'var(--color-border)'}`,
                       color: 'var(--color-text)',
                     }}
                     onFocus={(e) => {
-                      if (!errors.excerpt) e.currentTarget.style.borderColor = 'var(--color-accent)';
+                      if (!errors.summary) e.currentTarget.style.borderColor = 'var(--color-accent)';
                     }}
                     onBlur={(e) => {
-                      if (!errors.excerpt) e.currentTarget.style.borderColor = 'var(--color-border)';
+                      if (!errors.summary) e.currentTarget.style.borderColor = 'var(--color-border)';
                     }}
                   />
-                  <FieldError message={errors.excerpt} />
+                  <FieldError message={errors.summary} />
                 </div>
 
                 {/* ── Editor de Conteúdo ────────────────────────────────── */}
-                <div className="flex flex-col" style={{ minHeight: 'calc(100vh - 360px)' }}>
+                <div className="flex flex-col" style={{ minHeight: '75vh' }}>
                   <SectionLabel required>Conteúdo</SectionLabel>
-                  <div
+                  <RichTextEditor
+                    content={form.content}
+                    onChange={(html) => set('content', html)}
                     className="flex-1"
                     style={{
-                      borderRadius: '10px',
-                      overflow: 'hidden',
                       border: errors.content ? '2px solid var(--color-error)' : '1px solid var(--color-border)',
+                      boxShadow: 'none', // Remove shadow to fit inside if needed, or keep default
                     }}
-                  >
-                    <RichTextEditor
-                      content={form.content}
-                      onChange={(html) => set('content', html)}
-                    />
-                  </div>
+                  />
                   <FieldError message={errors.content} />
                 </div>
 
-                {/* ── Log de auditoria (modo edição) ───────────────────── */}
+                {/* ── Log de auditoria (modo edição) — RB020 ───────────── */}
+                {/* RB020: changeDescription obrigatório em TODA edição (backend valida NotEmpty) */}
                 {isEdit && (
                   <div
-                    className="mt-8 p-4 rounded-[10px] border"
+                    className="mt-8 p-4 rounded-[8px] border"
                     style={{ backgroundColor: 'var(--color-warning-subtle)', borderColor: 'var(--color-warning)' }}
                   >
                     <p className="text-[12px] font-bold mb-2 flex items-center gap-1.5" style={{ color: 'var(--color-warning)' }}>
                       <CheckCircle2 size={13} />
-                      Log de Auditoria (obrigatório ao publicar)
+                      Log de Auditoria (obrigatório em toda edição)
                     </p>
                     <textarea
                       id="kb-change-description"
@@ -871,7 +931,7 @@ export default function ArticleEditorPage() {
                       onChange={(e) => set('changeDescription', e.target.value)}
                       placeholder="Ex: Corrigido o passo 3. Adicionado exemplo de configuração de VLAN 100."
                       rows={2}
-                      className="w-full px-3 py-2 text-[13px] rounded-[6px] resize-none focus:outline-none"
+                      className="w-full px-3 py-2 text-[13px] rounded-[6px] resize-none focus:outline-none kb-transition-border"
                       style={{
                         backgroundColor: 'var(--color-surface)',
                         border: `1px solid ${errors.changeDescription ? 'var(--color-error)' : 'var(--color-warning)'}`,
@@ -880,7 +940,7 @@ export default function ArticleEditorPage() {
                     />
                     <FieldError message={errors.changeDescription} />
                     <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-text-faint)' }}>
-                      Esta descrição fica registada no histórico de versões.
+                      Obrigatório — fica registado no histórico de versões (RB020).
                     </p>
                   </div>
                 )}
@@ -892,7 +952,7 @@ export default function ArticleEditorPage() {
 
             {/* ── SIDEBAR DIREITA ───────────────────────────────────────── */}
             <div
-              className="shrink-0 overflow-y-auto flex flex-col gap-4 p-4"
+              className="shrink-0 overflow-y-auto flex flex-col gap-4 px-4 pt-5 pb-4"
               style={{
                 width: '280px',
                 borderLeft: '1px solid var(--color-border)',
@@ -963,7 +1023,7 @@ export default function ArticleEditorPage() {
                   <button
                     type="button"
                     onClick={() => setShowCreateCategory(true)}
-                    className="w-full flex items-center justify-center gap-2 h-[36px] rounded-[7px] text-[12px] font-semibold border border-dashed transition-colors"
+                    className="w-full flex items-center justify-center gap-2 h-[38px] rounded-[7px] text-[12px] font-semibold border border-dashed transition-colors"
                     style={{
                       borderColor: errors.categoryId ? 'var(--color-error)' : 'var(--color-border)',
                       color: errors.categoryId ? 'var(--color-error)' : 'var(--color-accent)',
@@ -978,12 +1038,14 @@ export default function ArticleEditorPage() {
                     id="kb-category"
                     value={form.categoryId}
                     onChange={(e) => set('categoryId', e.target.value)}
-                    className="w-full h-[36px] px-3 text-[13px] rounded-[7px] focus:outline-none cursor-pointer"
+                    className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none cursor-pointer kb-transition-border"
                     style={{
                       backgroundColor: 'var(--color-surface-dim)',
                       border: `1px solid ${errors.categoryId ? 'var(--color-error)' : 'var(--color-border)'}`,
                       color: form.categoryId ? 'var(--color-text)' : 'var(--color-text-faint)',
                     }}
+                    onFocus={(e) => { if (!errors.categoryId) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                    onBlur={(e) => { if (!errors.categoryId) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
                   >
                     <option value="">Selecione...</option>
                     {categoryFlat.map((cat) => (
@@ -1032,7 +1094,7 @@ export default function ArticleEditorPage() {
                   <button
                     type="button"
                     onClick={() => setShowCreateTag(true)}
-                    className="w-full flex items-center justify-center gap-2 h-[36px] rounded-[7px] text-[12px] font-semibold border border-dashed transition-colors"
+                    className="w-full flex items-center justify-center gap-2 h-[38px] rounded-[7px] text-[12px] font-semibold border border-dashed transition-colors"
                     style={{
                       borderColor: errors.tagIds ? 'var(--color-error)' : 'var(--color-border)',
                       color: errors.tagIds ? 'var(--color-error)' : 'var(--color-accent)',
@@ -1043,36 +1105,12 @@ export default function ArticleEditorPage() {
                     Criar primeira tag
                   </button>
                 ) : (
-                  <div
-                    className="flex flex-wrap gap-1.5"
-                    style={{
-                      maxHeight: '160px',
-                      overflowY: 'auto',
-                      padding: '2px',
-                    }}
-                  >
-                    {allTags.map((tag) => {
-                      const selected = form.tagIds.includes(tag.id);
-                      return (
-                        <button
-                          key={tag.id}
-                          type="button"
-                          onClick={() => toggleTag(tag.id)}
-                          aria-pressed={selected}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold transition-all"
-                          style={{
-                            backgroundColor: selected ? 'var(--color-accent)' : 'var(--color-surface-dim)',
-                            color: selected ? 'white' : 'var(--color-text-muted)',
-                            border: `1px solid ${selected ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                          }}
-                        >
-                          <TagIcon size={8} />
-                          {tag.name}
-                          {selected && <X size={8} />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <TagCombobox 
+                    allTags={form.categoryId ? allTags.filter(t => !t.categoryId || t.categoryId === form.categoryId) : allTags}
+                    selectedTagIds={form.tagIds}
+                    onChange={(tagIds) => set('tagIds', tagIds)}
+                    error={errors.tagIds}
+                  />
                 )}
                 <FieldError message={errors.tagIds} />
                 {form.tagIds.length > 0 && (
@@ -1084,32 +1122,91 @@ export default function ArticleEditorPage() {
 
               <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
 
-              {/* Tempo de leitura */}
+              {/* Nível de Dificuldade — RB023 */}
               <div>
-                <SectionLabel>
+                <SectionLabel required>
                   <span className="flex items-center gap-1">
-                    <Clock size={10} />
-                    Tempo de Leitura (min)
+                    Nível de Dificuldade
                   </span>
                 </SectionLabel>
-                <input
-                  id="kb-reading-time"
-                  type="number"
-                  min={1}
-                  max={120}
-                  placeholder="Ex: 5"
-                  value={form.estimatedReadingTimeMinutes}
-                  onChange={(e) => set('estimatedReadingTimeMinutes', e.target.value)}
-                  className="w-full h-[36px] px-3 text-[13px] rounded-[7px] focus:outline-none"
+                {/* RB023: DifficultyLevel obrigatório (backend valida IsInEnum) */}
+                <select
+                  id="kb-difficulty"
+                  value={form.difficulty}
+                  onChange={(e) => set('difficulty', Number(e.target.value) as DifficultyLevelType)}
+                  className="w-full h-[36px] px-3 text-[13px] rounded-[7px] focus:outline-none cursor-pointer"
                   style={{
                     backgroundColor: 'var(--color-surface-dim)',
-                    border: `1px solid ${errors.estimatedReadingTimeMinutes ? 'var(--color-error)' : 'var(--color-border)'}`,
+                    border: '1px solid var(--color-border)',
                     color: 'var(--color-text)',
                   }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = errors.estimatedReadingTimeMinutes ? 'var(--color-error)' : 'var(--color-border)')}
-                />
-                <FieldError message={errors.estimatedReadingTimeMinutes} />
+                >
+                  {Object.entries(DIFFICULTY_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-faint)' }}>
+                  {form.difficulty === 1 ? 'Para operações rotineiras simples.' :
+                   form.difficulty === 2 ? 'Requer conhecimento prévio moderado.' :
+                   'Para especialistas — configurações complexas.'}
+                </p>
+              </div>
+
+              <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
+
+              {/* Tempo de leitura — RB023 */}
+              <div>
+                <SectionLabel required>
+                  <span className="flex items-center gap-1">
+                    <Clock size={10} />
+                    Tempo Estimado (min)
+                  </span>
+                </SectionLabel>
+                <div 
+                  className="flex items-center w-full h-[36px] px-3 rounded-[7px] focus-within:border-[var(--color-accent)] kb-transition-border"
+                  style={{
+                    backgroundColor: 'var(--color-surface-dim)',
+                    border: `1px solid ${errors.estimatedTimeInMinutes ? 'var(--color-error)' : 'var(--color-border)'}`,
+                  }}
+                >
+                  <input
+                    id="kb-reading-time"
+                    type="number"
+                    min={1}
+                    max={480}
+                    placeholder="5"
+                    value={form.estimatedTimeInMinutes || ''}
+                    onChange={(e) => set('estimatedTimeInMinutes', Number(e.target.value))}
+                    className="flex-1 bg-transparent focus:outline-none text-[13px] kb-no-spinners"
+                    style={{ color: 'var(--color-text)' }}
+                  />
+                  <span className="text-[13px] mr-2 select-none" style={{ color: 'var(--color-text-muted)' }}>
+                    {form.estimatedTimeInMinutes === 1 ? 'minuto' : 'minutos'}
+                  </span>
+                  <div className="flex flex-col ml-1 border-l border-[var(--color-border)] pl-2 h-full py-1 justify-between">
+                    <button 
+                      type="button" 
+                      tabIndex={-1}
+                      onClick={() => set('estimatedTimeInMinutes', (form.estimatedTimeInMinutes || 0) + 1)} 
+                      className="hover:text-white transition-colors"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      <ChevronUp size={12} strokeWidth={3} />
+                    </button>
+                    <button 
+                      type="button" 
+                      tabIndex={-1}
+                      onClick={() => set('estimatedTimeInMinutes', Math.max(1, (form.estimatedTimeInMinutes || 0) - 1))} 
+                      className="hover:text-white transition-colors"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    >
+                      <ChevronDown size={12} strokeWidth={3} />
+                    </button>
+                  </div>
+                </div>
+                <FieldError message={errors.estimatedTimeInMinutes} />
               </div>
 
               {/* URL da capa */}
@@ -1151,9 +1248,10 @@ export default function ArticleEditorPage() {
                     <p className="text-[12px] font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)' }}>
                       {form.title || 'Título do artigo'}
                     </p>
-                    {form.excerpt && (
+                    {/* RB009: summary (antes era excerpt) */}
+                    {form.summary && (
                       <p className="text-[10px] mt-1 line-clamp-2" style={{ color: 'var(--color-text-muted)' }}>
-                        {form.excerpt}
+                        {form.summary}
                       </p>
                     )}
                     {form.tagIds.length > 0 && (
@@ -1183,16 +1281,26 @@ export default function ArticleEditorPage() {
               )}
 
               {/* Botão principal na sidebar */}
-              <Button
-                type="submit"
-                form="kb-editor-form"
-                fullWidth
-                disabled={isSaving || isLoadingMeta}
-                isLoading={isSaving}
-              >
-                <BookOpen size={14} />
-                {isEdit ? 'Guardar Nova Versão' : 'Criar Artigo'}
-              </Button>
+              <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex-1">
+                  <Button
+                    type="submit"
+                    form="kb-editor-form"
+                    fullWidth
+                    disabled={isSaving || isLoadingMeta}
+                    isLoading={isSaving}
+                  >
+                    <BookOpen size={14} />
+                    {isEdit ? 'Guardar Nova Versão' : 'Salvar Artigo'}
+                    <div className="ml-2" onClick={(e) => e.preventDefault()}>
+                      <HelpTooltip 
+                        content="Salva o artigo com o status selecionado acima no painel lateral." 
+                        align="left"
+                      />
+                    </div>
+                  </Button>
+                </div>
+              </div>
             </div>
           </form>
         </div>

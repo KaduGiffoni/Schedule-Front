@@ -180,26 +180,25 @@ const ArticleCard = ({
 
   return (
     <article
-      className="group relative flex flex-col rounded-[14px] border border-[var(--color-border)] overflow-hidden cursor-pointer transition-all duration-200"
+      className="group relative flex flex-col rounded-[12px] border overflow-hidden cursor-pointer"
       style={{
         backgroundColor: 'var(--color-surface)',
-        boxShadow: hovered ? 'var(--shadow-lg)' : 'var(--shadow-sm)',
-        transform: hovered ? 'translateY(-2px)' : 'translateY(0)',
         borderColor: hovered ? 'var(--color-accent)' : 'var(--color-border)',
+        boxShadow: hovered ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+        transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
+        transition: 'border-color 150ms var(--ease-out-expo), box-shadow 150ms var(--ease-out-expo), transform 150ms var(--ease-out-expo)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => onOpen(article.id)}
       aria-label={`Ver artigo: ${article.title}`}
     >
-      {/* Topo colorido como acento visual */}
+      {/* Faixa superior — acento de status sem gradiente (protocolo §2) */}
       <div
-        className="h-[3px] w-full"
+        className="h-[3px] w-full shrink-0"
         style={{
-          background: article.isRead
-            ? 'var(--color-success)'
-            : 'linear-gradient(90deg, var(--color-accent), var(--color-accent-hover))',
-          opacity: article.isRead ? 0.6 : 1,
+          backgroundColor: article.isRead ? 'var(--color-success)' : 'var(--color-accent)',
+          opacity: article.isRead ? 0.7 : 1,
         }}
       />
 
@@ -222,10 +221,10 @@ const ArticleCard = ({
           {article.title}
         </h3>
 
-        {/* Excerpt */}
-        {article.excerpt && (
+        {/* Summary — RB009: campo "summary" do backend (era "excerpt") */}
+        {article.summary && (
           <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed line-clamp-3 flex-1">
-            {article.excerpt}
+            {article.summary}
           </p>
         )}
 
@@ -264,10 +263,11 @@ const ArticleCard = ({
             <Heart size={11} className={article.isFavorited ? 'text-[var(--color-error)]' : ''} />
             {article.favoriteCount ?? 0}
           </span>
-          {article.estimatedReadingTimeMinutes && (
+          {/* RB023: Tempo estimado — campo "estimatedTimeInMinutes" do backend */}
+          {article.estimatedTimeInMinutes && (
             <span className="flex items-center gap-1">
               <Clock size={11} />
-              {article.estimatedReadingTimeMinutes}min
+              {article.estimatedTimeInMinutes}min
             </span>
           )}
         </div>
@@ -293,15 +293,19 @@ const ArticleCard = ({
 const EmptyState = ({ onClear }: { onClear: () => void }) => (
   <div className="flex flex-col items-center justify-center py-24 px-8 text-center">
     <div
-      className="w-20 h-20 rounded-full flex items-center justify-center mb-5"
-      style={{ backgroundColor: 'var(--color-surface-dim)', color: 'var(--color-text-faint)' }}
+      className="w-16 h-16 rounded-[12px] flex items-center justify-center mb-5 border"
+      style={{
+        backgroundColor: 'var(--color-surface-dim)',
+        borderColor: 'var(--color-border)',
+        color: 'var(--color-text-faint)',
+      }}
     >
-      <BookOpen size={36} />
+      <BookOpen size={28} />
     </div>
-    <p className="text-[18px] font-bold text-[var(--color-text)] mb-1">
+    <p className="text-[17px] font-bold text-[var(--color-text)] mb-1.5">
       Nenhum artigo encontrado
     </p>
-    <p className="text-[13px] text-[var(--color-text-muted)] max-w-sm mb-5">
+    <p className="text-[13px] text-[var(--color-text-muted)] max-w-sm mb-5" style={{ lineHeight: 1.6 }}>
       Tente ajustar o termo de pesquisa, remover filtros ou selecionar uma categoria diferente.
     </p>
     <Button variant="outline" size="sm" onClick={onClear}>
@@ -319,7 +323,7 @@ const PAGE_SIZE = 12;
 export default function KnowledgeBasePage() {
   const navigate = useNavigate();
   const showToast = useToastStore((s) => s.showToast);
-  // RB002: apenas Admin ou Manager podem criar/editar artigos.
+  // RB002/RB003: apenas Admin ou Manager podem criar artigos
   const canCreate = useHasRole('Admin', 'Manager');
 
   // ── Estado: árvore de categorias ──────────────────────────────────────────
@@ -433,6 +437,8 @@ export default function KnowledgeBasePage() {
   };
 
   // ── Filtro de tags client-side (as tags não são parâmetro de rota no backend) ──
+  // RB026: O backend não expe o filtro por tag via [FromQuery]. O filtro é aplicado
+  // client-side sobre a página atual. Quando há tags selecionadas, um aviso é exibido.
   const filteredArticles =
     selectedTagIds.length > 0
       ? articles.filter((a) =>
@@ -558,7 +564,7 @@ export default function KnowledgeBasePage() {
 
         {/* ── Top Bar: pesquisa + CTA ──────────────────────────────────────── */}
         <div
-          className="flex items-center gap-4 px-6 py-4 border-b border-[var(--color-border)] shrink-0"
+          className="flex items-center gap-4 px-6 py-3.5 border-b border-[var(--color-border)] shrink-0"
           style={{ backgroundColor: 'var(--color-surface)' }}
         >
           {/* Barra de pesquisa FTS */}
@@ -580,7 +586,7 @@ export default function KnowledgeBasePage() {
                 border: '1px solid var(--color-border)',
                 color: 'var(--color-text)',
                 outline: 'none',
-                transition: 'border-color 150ms ease-out, box-shadow 150ms ease-out',
+                transition: 'border-color 150ms var(--ease-out-expo), box-shadow 150ms var(--ease-out-expo)',
               }}
               onFocus={(e) => {
                 e.currentTarget.style.borderColor = 'var(--color-accent)';
@@ -700,6 +706,24 @@ export default function KnowledgeBasePage() {
           </div>
         )}
 
+        {/* RB026: Aviso de filtro de tags client-side — backend não expõe filtro por tag via query */}
+        {selectedTagIds.length > 0 && (
+          <div
+            className="mx-6 mb-3 px-3 py-2 rounded-[6px] text-[11px] flex items-center gap-2"
+            style={{
+              backgroundColor: 'var(--color-warning-subtle)',
+              border: '1px solid var(--color-warning)',
+              color: 'var(--color-warning)',
+            }}
+          >
+            {/* Protocolo §2: sem emojis — usar ícone */}
+            <AlertCircle size={13} style={{ flexShrink: 0 }} />
+            <span>
+              Filtro de tags aplicado sobre a página atual. Para resultados completos, combine a busca por texto com a navegação por categoria.
+            </span>
+          </div>
+        )}
+
         {/* ── Cabeçalho da grid: contagem + paginação ──────────────────────── */}
         <div
           className="flex items-center justify-between px-6 py-3 shrink-0 border-b border-[var(--color-border-subtle)]"
@@ -765,13 +789,18 @@ export default function KnowledgeBasePage() {
           ) : filteredArticles.length === 0 ? (
             <EmptyState onClear={handleClearAll} />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-              {filteredArticles.map((article) => (
-                <ArticleCard
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+              {filteredArticles.map((article, i) => (
+                <div
                   key={article.id}
-                  article={article}
-                  onOpen={handleOpenArticle}
-                />
+                  className="kb-card-enter"
+                  style={{ '--card-index': i } as React.CSSProperties}
+                >
+                  <ArticleCard
+                    article={article}
+                    onOpen={handleOpenArticle}
+                  />
+                </div>
               ))}
             </div>
           )}

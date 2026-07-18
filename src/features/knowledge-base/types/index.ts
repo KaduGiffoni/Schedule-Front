@@ -2,6 +2,7 @@
 // knowledge-base/types/index.ts
 // Espelha os DTOs do backend ASP.NET Core (Controllers lidos em 2026-07-14).
 // ATENÇÃO: todos os IDs são Guid → string no TypeScript.
+// Corrigido em 2026-07-17: alinhamento de nomes de campos com o backend real.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ export interface Tag {
   name: string;
   slug?: string | null;
   color?: string | null;
+  categoryId?: string;  // Simulação de relação frontend
 }
 
 /**
@@ -90,17 +92,37 @@ export interface CreateKnowledgeTagRequest {
  * RB012: Draft | Published | Archived.
  */
 export const ArticleStatus = {
-  Draft:     0,
-  Published: 1,
-  Archived:  2,
+  Draft:     1,
+  Published: 2,
+  Archived:  3,
 } as const;
 
 export type ArticleStatusType = typeof ArticleStatus[keyof typeof ArticleStatus];
 
 export const ARTICLE_STATUS_LABELS: Record<ArticleStatusType, string> = {
-  0: 'Rascunho',
-  1: 'Publicado',
-  2: 'Arquivado',
+  1: 'Rascunho',
+  2: 'Publicado',
+  3: 'Arquivado',
+};
+
+/**
+ * Nível de dificuldade do artigo (espelha o enum DifficultyLevel do C#).
+ * RB023: Nível de dificuldade obrigatório no artigo.
+ * Basic = 1, Intermediate = 2, Advanced = 3.
+ */
+// RB023: Nível de dificuldade — espelha DifficultyLevel.cs do backend
+export const DifficultyLevel = {
+  Basic:        1,
+  Intermediate: 2,
+  Advanced:     3,
+} as const;
+
+export type DifficultyLevelType = typeof DifficultyLevel[keyof typeof DifficultyLevel];
+
+export const DIFFICULTY_LABELS: Record<DifficultyLevelType, string> = {
+  1: 'Básico',
+  2: 'Intermediário',
+  3: 'Avançado',
 };
 
 /** Autor simplificado embutido no DTO do artigo */
@@ -113,12 +135,18 @@ export interface ArticleAuthor {
 /**
  * Resumo do artigo — usado nos cards da listagem (GET /api/knowledge-base/articles).
  * RB023: Metadados obrigatórios: autor original, datas, tempo estimado, nível.
+ *
+ * ATENÇÃO — Nomes de campos espelham o JSON do backend (camelCase do C#):
+ *   summary               ← KnowledgeArticleSummaryResponse.Summary
+ *   estimatedTimeInMinutes ← KnowledgeArticleSummaryResponse.EstimatedTimeInMinutes
+ *   difficulty             ← KnowledgeArticleSummaryResponse.Difficulty
  */
 export interface ArticleSummary {
   id: string;             // Guid
   title: string;
   slug: string;
-  excerpt?: string | null;
+  // RB009: resumo do artigo — campo "summary" conforme DTO do backend
+  summary?: string | null;
   status: ArticleStatusType;
   coverImageUrl?: string | null;
   category?: {
@@ -135,8 +163,10 @@ export interface ArticleSummary {
   isFavorited: boolean;
   /** Se o utilizador logado marcou como lido (RB032) */
   isRead: boolean;
-  /** RB023: Tempo estimado de leitura em minutos */
-  estimatedReadingTimeMinutes?: number | null;
+  // RB023: Tempo estimado — campo "estimatedTimeInMinutes" conforme DTO do backend
+  estimatedTimeInMinutes?: number | null;
+  // RB023: Nível de dificuldade — campo "difficulty" conforme DifficultyLevel.cs
+  difficulty?: DifficultyLevelType | null;
   createdAt: string;      // ISO 8601
   updatedAt: string;      // ISO 8601
   publishedAt?: string | null;
@@ -172,37 +202,51 @@ export interface ArticleSearchParams {
 /**
  * Body de criação de artigo.
  * POST /api/knowledge-base/articles — requer Editor | Administrator.
- * RB008: título max 150 chars. RB009: excerpt obrigatório.
+ * RB002: acesso restrito a Editor/Administrator.
+ * RB008: título max 150 chars. RB009: summary obrigatório.
  * RB010: categoryId obrigatório. RB011: mínimo 1 tag.
+ * RB023: estimatedTimeInMinutes e difficulty obrigatórios (validados pelo backend).
+ *
+ * Nomes de campos correspondem EXACTAMENTE ao JSON serializado pelo backend:
+ *   summary               ← CreateKnowledgeArticleRequest.Summary
+ *   estimatedTimeInMinutes ← CreateKnowledgeArticleRequest.EstimatedTimeInMinutes
+ *   difficulty             ← CreateKnowledgeArticleRequest.Difficulty
  */
 export interface CreateKnowledgeArticleRequest {
-  title: string;          // RB008: obrigatório, max 150 chars
-  excerpt: string;        // RB009: obrigatório
+  title: string;                   // RB008: obrigatório, max 150 chars
+  summary: string;                 // RB009: obrigatório (era "excerpt" — corrigido)
   content: string;
-  categoryId: string;     // Guid — RB010: obrigatório
-  tagIds: string[];       // Guid[] — RB011: mínimo 1
-  status: ArticleStatusType;
+  categoryId: string;              // Guid — RB010: obrigatório
+  tagIds: string[];                // Guid[] — RB011: mínimo 1
+  status: ArticleStatusType;       // RB012
+  // RB023: obrigatório pelo validator do backend (GreaterThan(0))
+  estimatedTimeInMinutes: number;
+  // RB023: obrigatório — DifficultyLevel.cs: Basic=1, Intermediate=2, Advanced=3
+  difficulty: DifficultyLevelType;
   coverImageUrl?: string;
-  estimatedReadingTimeMinutes?: number;
 }
 
 /**
  * Body de atualização de artigo.
  * PUT /api/knowledge-base/articles — SEM {id} na rota, o ID vem no body.
  * RB004: Toda edição gera nova versão.
+ * RB020: changeDescription OBRIGATÓRIO em TODA atualização (backend valida NotEmpty).
  */
 export interface UpdateKnowledgeArticleRequest {
-  id: string;             // Guid — OBRIGATÓRIO no body (não há {id} na rota)
-  title?: string;
-  excerpt?: string;
-  content?: string;
-  categoryId?: string;    // Guid
-  tagIds?: string[];      // Guid[]
-  status?: ArticleStatusType;
+  id: string;                      // Guid — OBRIGATÓRIO no body (não há {id} na rota)
+  title: string;                   // RB008
+  summary: string;                 // RB009 (era "excerpt" — corrigido)
+  content: string;
+  categoryId: string;              // Guid — RB010
+  tagIds: string[];                // Guid[] — RB011
+  status: ArticleStatusType;       // RB012
+  // RB023: obrigatório (GreaterThan(0))
+  estimatedTimeInMinutes: number;
+  // RB023: obrigatório
+  difficulty: DifficultyLevelType;
   coverImageUrl?: string;
-  estimatedReadingTimeMinutes?: number;
-  /** RB020: Descrição da alteração para o log de auditoria */
-  changeDescription?: string;
+  // RB020: OBRIGATÓRIO em TODA edição — o validator do backend exige NotEmpty()
+  changeDescription: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import { ArrowLeft, Tag as TagIcon, Folder, Trash2, Plus, Loader2 } from 'lucide
 export default function KnowledgeBaseSettingsPage() {
   const navigate = useNavigate();
   const showToast = useToastStore((s) => s.showToast);
+  // RB002/RB003: s\u00f3 Admin ou Manager podem aceder \u00e0s configura\u00e7\u00f5es
   const canEdit = useHasRole('Admin', 'Manager');
 
   const [activeTab, setActiveTab] = useState<'tags' | 'categories'>('categories');
@@ -29,6 +30,8 @@ export default function KnowledgeBaseSettingsPage() {
   const [newCatName, setNewCatName] = useState('');
   const [newCatParent, setNewCatParent] = useState('');
   const [isCatCreating, setIsCatCreating] = useState(false);
+  
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   // Guard
   useEffect(() => {
@@ -102,12 +105,18 @@ export default function KnowledgeBaseSettingsPage() {
 
   const handleDeleteTag = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja apagar esta tag?')) return;
+    setDeletingIds((prev) => new Set(prev).add(id));
     try {
       await knowledgeBaseService.tags.remove(id);
       showToast('Tag apagada.', 'success');
       await loadTags();
     } catch {
       showToast('Erro ao apagar tag.', 'error');
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -134,12 +143,18 @@ export default function KnowledgeBaseSettingsPage() {
 
   const handleDeleteCategory = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja apagar esta categoria? Todos os artigos associados poderão ficar sem categoria.')) return;
+    setDeletingIds((prev) => new Set(prev).add(id));
     try {
       await knowledgeBaseService.categories.remove(id);
       showToast('Categoria apagada.', 'success');
       await loadCategories();
     } catch {
       showToast('Erro ao apagar categoria. Pode ter sub-categorias.', 'error');
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -148,7 +163,15 @@ export default function KnowledgeBaseSettingsPage() {
       <ul className={level > 0 ? 'ml-6 mt-2 border-l border-[var(--color-border)] pl-4' : 'space-y-2'}>
         {nodes.map((node) => (
           <li key={node.id} className="py-1">
-            <div className="flex items-center justify-between p-3 rounded-[8px] bg-[var(--color-surface)] border border-[var(--color-border)]">
+            <div
+              className="flex items-center justify-between p-3 rounded-[8px] border transition-all duration-300"
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+                opacity: deletingIds.has(node.id) ? 0.5 : 1,
+                transform: deletingIds.has(node.id) ? 'scale(0.98)' : 'scale(1)',
+              }}
+            >
               <div className="flex items-center gap-2">
                 <Folder size={15} style={{ color: 'var(--color-accent)' }} />
                 <span className="text-[14px] font-semibold text-[var(--color-text)]">{node.name}</span>
@@ -161,7 +184,8 @@ export default function KnowledgeBaseSettingsPage() {
               <button
                 type="button"
                 onClick={() => handleDeleteCategory(node.id)}
-                className="w-8 h-8 flex items-center justify-center rounded-full text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors"
+                disabled={deletingIds.has(node.id)}
+                className="w-8 h-8 flex items-center justify-center rounded-full text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Apagar categoria"
               >
                 <Trash2 size={14} />
@@ -232,14 +256,18 @@ export default function KnowledgeBaseSettingsPage() {
               <div className="p-5 rounded-[12px] border bg-[var(--color-surface-dim)] border-[var(--color-border)]">
                 <h3 className="text-[14px] font-bold text-[var(--color-text)] mb-4">Nova Categoria</h3>
                 <form onSubmit={handleCreateCategory} className="flex gap-4 items-end">
-                  <div className="flex-1">
+                  <div className="flex-1 relative">
                     <InputField
                       id="cat-name"
                       label="Nome da Categoria"
                       value={newCatName}
                       onChange={(e) => setNewCatName(e.target.value)}
                       placeholder="Ex: Redes"
+                      maxLength={50}
                     />
+                    <div style={{ position: 'absolute', top: 0, right: 0 }}>
+                       <span className="text-[10px] text-[var(--color-text-faint)]">{newCatName.length}/50</span>
+                    </div>
                   </div>
                   <div className="flex-1">
                     <label className="block text-[12px] font-semibold text-[var(--color-text-muted)] mb-1.5">
@@ -292,14 +320,18 @@ export default function KnowledgeBaseSettingsPage() {
               <div className="p-5 rounded-[12px] border bg-[var(--color-surface-dim)] border-[var(--color-border)]">
                 <h3 className="text-[14px] font-bold text-[var(--color-text)] mb-4">Nova Tag</h3>
                 <form onSubmit={handleCreateTag} className="flex gap-4 items-end">
-                  <div className="flex-1">
+                  <div className="flex-1 relative">
                     <InputField
                       id="tag-name"
                       label="Nome da Tag"
                       value={newTagName}
                       onChange={(e) => setNewTagName(e.target.value)}
                       placeholder="Ex: Cisco"
+                      maxLength={50}
                     />
+                    <div style={{ position: 'absolute', top: 0, right: 0 }}>
+                       <span className="text-[10px] text-[var(--color-text-faint)]">{newTagName.length}/50</span>
+                    </div>
                   </div>
                   <Button type="submit" disabled={isTagCreating || !newTagName.trim()} isLoading={isTagCreating}>
                     <Plus size={16} />
@@ -324,17 +356,20 @@ export default function KnowledgeBaseSettingsPage() {
                     {tags.map((tag) => (
                       <div
                         key={tag.id}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300"
                         style={{
                           backgroundColor: 'var(--color-surface)',
                           borderColor: 'var(--color-border)',
+                          opacity: deletingIds.has(tag.id) ? 0.5 : 1,
+                          transform: deletingIds.has(tag.id) ? 'scale(0.95)' : 'scale(1)',
                         }}
                       >
                         <TagIcon size={12} style={{ color: 'var(--color-accent)' }} />
                         <span className="text-[13px] font-semibold text-[var(--color-text)]">{tag.name}</span>
                         <button
                           onClick={() => handleDeleteTag(tag.id)}
-                          className="ml-1 w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-faint)] hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] transition-colors"
+                          disabled={deletingIds.has(tag.id)}
+                          className="ml-1 w-5 h-5 flex items-center justify-center rounded-full text-[var(--color-text-faint)] hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Trash2 size={12} />
                         </button>

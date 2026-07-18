@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -22,6 +22,8 @@ import { knowledgeBaseService } from '../api/knowledgeBaseService';
 import {
   ArticleStatus,
   ARTICLE_STATUS_LABELS,
+  DIFFICULTY_LABELS,
+  type DifficultyLevelType,
   type ArticleDetail,
   type ArticleSummary,
 } from '../types';
@@ -52,6 +54,37 @@ function formatDateShort(iso: string): string {
   });
 }
 
+// ───────────────────────────────────────────────────────────────────────────────
+// PROCESS TERMINAL CONTENT
+// ───────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Transforma o HTML estático de blocos terminais:
+ * envolve cada linha do <code class="kb-terminal-code"> em
+ * <span class="kb-terminal-line"> para que o CSS ::before
+ * injete automaticamente o prefixo "> " em cada linha.
+ *
+ * Esta função é necessária porque o TerminalCodeBlock é um
+ * React Node View que só existe no editor; na visualização
+ * estática o conteúdo é HTML puro (dangerouslySetInnerHTML).
+ */
+function processTerminalContent(html: string): string {
+  if (!html) return html;
+
+  return html.replace(
+    /(<code[^>]*\bkb-terminal-code\b[^>]*>)([\s\S]*?)(<\/code>)/g,
+    (_, open: string, content: string, close: string) => {
+      const lines = content.split('\n');
+      // Remove trailing empty line to avoid spurious ">"
+      if (lines[lines.length - 1] === '') lines.pop();
+      const wrapped = lines
+        .map((line) => `<span class="kb-terminal-line">${line}</span>`)
+        .join('\n');
+      return `${open}${wrapped}${close}`;
+    },
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SUB-COMPONENTES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -59,13 +92,13 @@ function formatDateShort(iso: string): string {
 // ── Status Badge ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }: { status: number }) => {
   const cfg: Record<number, { label: string; cls: string }> = {
-    [ArticleStatus.Draft]:     { label: ARTICLE_STATUS_LABELS[0], cls: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)] border-[var(--color-warning)]' },
-    [ArticleStatus.Published]: { label: ARTICLE_STATUS_LABELS[1], cls: 'bg-[var(--color-success-subtle)] text-[var(--color-success)] border-[var(--color-success)]' },
-    [ArticleStatus.Archived]:  { label: ARTICLE_STATUS_LABELS[2], cls: 'bg-[var(--color-surface-dim)] text-[var(--color-text-faint)] border-[var(--color-border)]' },
+    [ArticleStatus.Draft]:     { label: ARTICLE_STATUS_LABELS[0], cls: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]' },
+    [ArticleStatus.Published]: { label: ARTICLE_STATUS_LABELS[1], cls: 'bg-[var(--color-success-subtle)] text-[var(--color-success)]' },
+    [ArticleStatus.Archived]:  { label: ARTICLE_STATUS_LABELS[2], cls: 'bg-[var(--color-surface-dim)] text-[var(--color-text-faint)]' },
   };
   const c = cfg[status] ?? cfg[ArticleStatus.Draft];
   return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-[6px] text-[11px] font-bold uppercase tracking-wider border ${c.cls}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase tracking-wider ${c.cls}`}>
       {c.label}
     </span>
   );
@@ -90,7 +123,8 @@ const RelatedCard = ({
       style={{
         backgroundColor: hovered ? 'var(--color-surface-raised)' : 'var(--color-surface-dim)',
         borderColor: hovered ? 'var(--color-accent)' : 'var(--color-border)',
-        transform: hovered ? 'translateX(3px)' : 'translateX(0)',
+        boxShadow: hovered ? 'var(--shadow-md)' : 'none',
+        transform: hovered ? 'translateY(-1px)' : 'translateY(0)',
       }}
       aria-label={`Ver artigo relacionado: ${article.title}`}
     >
@@ -104,10 +138,11 @@ const RelatedCard = ({
         <p className="text-[13px] font-semibold text-[var(--color-text)] leading-snug line-clamp-2">
           {article.title}
         </p>
-        {article.estimatedReadingTimeMinutes && (
+        {/* RB023: campo \"estimatedTimeInMinutes\" do backend */}
+        {article.estimatedTimeInMinutes && (
           <p className="text-[11px] text-[var(--color-text-faint)] flex items-center gap-1 mt-0.5">
             <Clock size={10} />
-            {article.estimatedReadingTimeMinutes}min de leitura
+            {article.estimatedTimeInMinutes}min de leitura
           </p>
         )}
       </div>
@@ -126,7 +161,7 @@ export default function ArticleViewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const showToast = useToastStore((s) => s.showToast);
-  // RB002/RB003: botão Editar só aparece para Admin ou Manager.
+  // RB002/RB003: botão Editar só aparece para Admin ou Manager
   const canEdit = useHasRole('Admin', 'Manager');
 
   // ── Estado do artigo ──────────────────────────────────────────────────────
@@ -141,6 +176,9 @@ export default function ArticleViewPage() {
   const [favoriteCount, setFavoriteCount] = useState(0);
   const [isFavLoading, setIsFavLoading] = useState(false);
   const [isReadLoading, setIsReadLoading] = useState(false);
+
+  // Ref para o div do conteúdo do artigo (usado para injetar botões copiar)
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // ── Carregar artigo e registar visualização (RB015, RB024) ────────────────
   useEffect(() => {
@@ -229,6 +267,37 @@ export default function ArticleViewPage() {
       .then(() => showToast('Link copiado para a área de transferência!', 'success'))
       .catch(() => showToast('Falha ao copiar o link.', 'error'));
   };
+
+  // ── Injetar botão copiar nos blocos de terminal após render ──────────────────
+  useEffect(() => {
+    if (!contentRef.current || !article) return;
+
+    const COPY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+    const CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+    const blocks = contentRef.current.querySelectorAll<HTMLElement>('pre.kb-terminal-pre');
+    blocks.forEach((pre) => {
+      // Evita duplicar botões em re-renders
+      if (pre.querySelector('.kb-copy-btn')) return;
+
+      const btn = document.createElement('button');
+      btn.className = 'kb-copy-btn';
+      btn.type = 'button';
+      btn.title = 'Copiar código';
+      btn.innerHTML = COPY_SVG;
+
+      btn.onclick = () => {
+        const code = pre.querySelector('code');
+        // Extrai o texto puro (sem o "> " do ::before)
+        const text = (code?.textContent ?? '').replace(/^> /gm, '');
+        navigator.clipboard.writeText(text).catch(() => {});
+        btn.innerHTML = CHECK_SVG;
+        setTimeout(() => { btn.innerHTML = COPY_SVG; }, 2000);
+      };
+
+      pre.appendChild(btn);
+    });
+  }, [article]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // ESTADOS DE LOADING / ERROR
@@ -371,20 +440,20 @@ export default function ArticleViewPage() {
           </div>
 
           {/* Título */}
-          <h1 className="text-[32px] font-extrabold leading-tight tracking-tight text-[var(--color-text)] mb-4">
+          <h1 className="text-[32px] font-extrabold leading-[1.15] tracking-tight text-[var(--color-text)] mb-4">
             {article.title}
           </h1>
 
-          {/* Excerpt / resumo */}
-          {article.excerpt && (
+          {/* Excerpt / resumo — RB009: campo "summary" do backend */}
+          {article.summary && (
             <p className="text-[16px] text-[var(--color-text-muted)] leading-relaxed mb-6 border-l-4 pl-4" style={{ borderColor: 'var(--color-accent)' }}>
-              {article.excerpt}
+              {article.summary}
             </p>
           )}
 
           {/* Meta: autor, data, tempo de leitura, visualizações */}
           <div
-            className="flex flex-wrap items-center gap-4 py-4 border-y border-[var(--color-border-subtle)] mb-8"
+            className="flex flex-wrap items-center gap-y-2 gap-x-4 py-4 border-y border-[var(--color-border-subtle)] mb-8 [&>*:not(:last-child)]:after:content-['·'] [&>*:not(:last-child)]:after:ml-4 [&>*:not(:last-child)]:after:text-[var(--color-border-subtle)]"
           >
             {article.author?.completeName && (
               <div className="flex items-center gap-2">
@@ -413,10 +482,18 @@ export default function ArticleViewPage() {
               </span>
             )}
 
-            {article.estimatedReadingTimeMinutes && (
+            {/* RB023: Tempo estimado — campo "estimatedTimeInMinutes" do backend */}
+            {article.estimatedTimeInMinutes && (
               <span className="flex items-center gap-1.5 text-[12px] text-[var(--color-text-faint)]">
                 <Clock size={12} />
-                {article.estimatedReadingTimeMinutes} min de leitura
+                {article.estimatedTimeInMinutes} min de leitura
+              </span>
+            )}
+
+            {/* RB023: Nível de dificuldade */}
+            {article.difficulty && (
+              <span className="flex items-center gap-1.5 text-[12px] text-[var(--color-text-faint)]">
+                {DIFFICULTY_LABELS[article.difficulty as DifficultyLevelType] ?? ''}
               </span>
             )}
 
@@ -449,17 +526,18 @@ export default function ArticleViewPage() {
         {/* ── Conteúdo do artigo (HTML do TipTap) ──────────────────────────── */}
         <div className="max-w-[860px] mx-auto px-8 pb-8">
           <div
-            className="prose prose-sm max-w-none text-[var(--color-text)]"
-            dangerouslySetInnerHTML={{ __html: article.content ?? '' }}
+            ref={contentRef}
+            className="kb-content"
+            dangerouslySetInnerHTML={{ __html: processTerminalContent(article.content ?? '') }}
           />
         </div>
 
         {/* ── Barra de Interações (sticky no rodapé) ───────────────────────── */}
         <div
-          className="sticky bottom-0 border-t border-[var(--color-border)]"
+          className="sticky bottom-0 border-t border-[var(--color-border)] z-10"
           style={{ backgroundColor: 'var(--color-surface)', backdropFilter: 'blur(8px)' }}
         >
-          <div className="max-w-[860px] mx-auto px-8 py-4 flex items-center gap-3 flex-wrap">
+          <div className="max-w-[860px] mx-auto px-8 py-3 flex items-center gap-3 flex-wrap">
 
             {/* ── Favoritar (RB014, RB025) ─────────────────────────────────── */}
             <button
@@ -469,7 +547,7 @@ export default function ArticleViewPage() {
               disabled={isFavLoading}
               aria-pressed={isFavorited}
               aria-label={isFavorited ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-[13px] font-bold border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-[8px] text-[13px] font-bold border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: isFavorited ? 'var(--color-error-subtle)' : 'var(--color-surface-dim)',
                 borderColor: isFavorited ? 'var(--color-error)' : 'var(--color-border)',
@@ -481,10 +559,10 @@ export default function ArticleViewPage() {
               ) : (
                 <Heart
                   size={15}
-                  className="transition-transform"
+                  className="transition-transform duration-200"
                   style={{
                     fill: isFavorited ? 'var(--color-error)' : 'none',
-                    transform: isFavorited ? 'scale(1.15)' : 'scale(1)',
+                    transform: isFavorited ? 'scale(1.1)' : 'scale(1)',
                   }}
                 />
               )}
@@ -508,7 +586,7 @@ export default function ArticleViewPage() {
               disabled={isReadLoading}
               aria-pressed={isRead}
               aria-label={isRead ? 'Desmarcar como lido' : 'Marcar como lido'}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-[13px] font-bold border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-[8px] text-[13px] font-bold border transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 backgroundColor: isRead ? 'var(--color-success-subtle)' : 'var(--color-surface-dim)',
                 borderColor: isRead ? 'var(--color-success)' : 'var(--color-border)',
@@ -628,14 +706,26 @@ export default function ArticleViewPage() {
                 </dd>
               </div>
             )}
-            {article.estimatedReadingTimeMinutes && (
+            {/* RB023: Tempo estimado — campo "estimatedTimeInMinutes" do backend */}
+            {article.estimatedTimeInMinutes && (
               <div>
                 <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
                   Tempo estimado
                 </dt>
                 <dd className="text-[13px] text-[var(--color-text)] flex items-center gap-1.5">
                   <Clock size={12} style={{ color: 'var(--color-accent)' }} />
-                  {article.estimatedReadingTimeMinutes} minutos
+                  {article.estimatedTimeInMinutes} minutos
+                </dd>
+              </div>
+            )}
+            {/* RB023: Nível de dificuldade */}
+            {article.difficulty && (
+              <div>
+                <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
+                  Dificuldade
+                </dt>
+                <dd className="text-[13px] font-semibold text-[var(--color-text)]">
+                  {DIFFICULTY_LABELS[article.difficulty as DifficultyLevelType] ?? ''}
                 </dd>
               </div>
             )}
@@ -657,7 +747,7 @@ export default function ArticleViewPage() {
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+        <hr className="w-full border-t border-[var(--color-border-subtle)]" />
 
         {/* ── Seu progresso ─────────────────────────────────────────────────── */}
         <div>
@@ -697,7 +787,7 @@ export default function ArticleViewPage() {
         {/* ── Artigos Relacionados (RB030 — cruzamento de Tags) ────────────── */}
         {(article.relatedArticles ?? []).length > 0 && (
           <>
-            <div className="h-px w-full" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+            <hr className="w-full border-t border-[var(--color-border-subtle)]" />
             <div>
               <p className="text-[10px] font-bold text-[var(--color-text-faint)] uppercase tracking-widest mb-3">
                 Artigos Relacionados
