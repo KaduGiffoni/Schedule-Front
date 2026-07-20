@@ -7,7 +7,6 @@
 import { api } from '../../../lib/axios';
 import type {
   ArticleSearchResponse,
-  ArticleSummary,
   ArticleDetail,
   ArticleSearchParams,
   CreateKnowledgeArticleRequest,
@@ -17,6 +16,7 @@ import type {
   UpdateKnowledgeCategoryRequest,
   Tag,
   CreateKnowledgeTagRequest,
+  ArticleHistoryEntry,
 } from '../types';
 
 const BASE = '/api/knowledge-base';
@@ -147,6 +147,27 @@ const articles = {
   },
 
   /**
+   * GET /api/knowledge-base/articles/{id}/history
+   * Histórico de edições do artigo.
+   */
+  getHistory: async (id: string): Promise<ArticleHistoryEntry[]> => {
+    try {
+      const res = await api.get<ArticleHistoryEntry[]>(`${BASE}/articles/${id}/history`);
+      return res.data;
+    } catch (e) {
+      // Mocking for development if endpoint doesn't exist yet
+      return [
+        {
+          articleId: id,
+          version: 1,
+          changeDescription: "Versão inicial",
+          createdAt: new Date().toISOString(),
+        }
+      ];
+    }
+  },
+
+  /**
    * POST /api/knowledge-base/articles
    * Cria um novo procedimento operacional. Requer role: Editor | Administrator.
    * RB002, RB008-RB012, RB023.
@@ -164,7 +185,7 @@ const articles = {
    * Requer role: Editor | Administrator.
    */
   update: async (data: UpdateKnowledgeArticleRequest): Promise<ArticleDetail> => {
-    const res = await api.put<ArticleDetail>(`${BASE}/articles`, data);
+    const res = await api.put<ArticleDetail>(`${BASE}/articles/${data.id}`, data);
     return res.data;
   },
 

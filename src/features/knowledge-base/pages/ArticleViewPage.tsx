@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -54,6 +54,17 @@ function formatDateShort(iso: string): string {
   });
 }
 
+function formatDateTime(iso: string): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 // ───────────────────────────────────────────────────────────────────────────────
 // PROCESS TERMINAL CONTENT
 // ───────────────────────────────────────────────────────────────────────────────
@@ -92,9 +103,9 @@ function processTerminalContent(html: string): string {
 // ── Status Badge ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }: { status: number }) => {
   const cfg: Record<number, { label: string; cls: string }> = {
-    [ArticleStatus.Draft]:     { label: ARTICLE_STATUS_LABELS[0], cls: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]' },
-    [ArticleStatus.Published]: { label: ARTICLE_STATUS_LABELS[1], cls: 'bg-[var(--color-success-subtle)] text-[var(--color-success)]' },
-    [ArticleStatus.Archived]:  { label: ARTICLE_STATUS_LABELS[2], cls: 'bg-[var(--color-surface-dim)] text-[var(--color-text-faint)]' },
+    [ArticleStatus.Draft]:     { label: ARTICLE_STATUS_LABELS[1], cls: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]' },
+    [ArticleStatus.Published]: { label: ARTICLE_STATUS_LABELS[2], cls: 'bg-[var(--color-success-subtle)] text-[var(--color-success)]' },
+    [ArticleStatus.Archived]:  { label: ARTICLE_STATUS_LABELS[3], cls: 'bg-[var(--color-surface-dim)] text-[var(--color-text-faint)]' },
   };
   const c = cfg[status] ?? cfg[ArticleStatus.Draft];
   return (
@@ -422,6 +433,14 @@ export default function ArticleViewPage() {
                 Editar
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate(`/base-conhecimento/${id}/historico`)}
+            >
+              <Clock size={13} />
+              Histórico
+            </Button>
           </div>
         </div>
 
@@ -452,9 +471,7 @@ export default function ArticleViewPage() {
           )}
 
           {/* Meta: autor, data, tempo de leitura, visualizações */}
-          <div
-            className="flex flex-wrap items-center gap-y-2 gap-x-4 py-4 border-y border-[var(--color-border-subtle)] mb-8 [&>*:not(:last-child)]:after:content-['·'] [&>*:not(:last-child)]:after:ml-4 [&>*:not(:last-child)]:after:text-[var(--color-border-subtle)]"
-          >
+          <div className="flex items-center gap-4 flex-wrap mb-6">
             {article.author?.completeName && (
               <div className="flex items-center gap-2">
                 <div
@@ -476,9 +493,9 @@ export default function ArticleViewPage() {
               </span>
             )}
 
-            {article.updatedAt && article.updatedAt !== article.publishedAt && (
+            {article.updatedAt && (
               <span className="text-[12px] text-[var(--color-text-faint)]">
-                Atualizado em {formatDateShort(article.updatedAt)}
+                Atualizado em {formatDateTime(article.updatedAt)}
               </span>
             )}
 
@@ -668,44 +685,57 @@ export default function ArticleViewPage() {
                 </dd>
               </div>
             )}
-            {article.author?.completeName && (
-              <div>
-                <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
-                  Autor
-                </dt>
-                <dd className="flex items-center gap-2">
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-                    style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
-                  >
-                    {article.author.completeName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-[13px] font-medium text-[var(--color-text)]">
-                    {article.author.completeName}
-                  </span>
-                </dd>
-              </div>
-            )}
-            {article.publishedAt && (
-              <div>
-                <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
-                  Publicado
-                </dt>
-                <dd className="text-[13px] text-[var(--color-text)]">
-                  {formatDateShort(article.publishedAt)}
-                </dd>
-              </div>
-            )}
-            {article.updatedAt && (
-              <div>
-                <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
-                  Última atualização
-                </dt>
-                <dd className="text-[13px] text-[var(--color-text)]">
-                  {formatDateShort(article.updatedAt)}
-                </dd>
-              </div>
-            )}
+            <div>
+              <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
+                Criado por
+              </dt>
+              <dd className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                  style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent-text)' }}
+                >
+                  {(article.author?.completeName || '?').charAt(0).toUpperCase()}
+                </div>
+                <span className="text-[13px] font-medium text-[var(--color-text)]">
+                  {article.author?.completeName || 'Sistema / Desconhecido'}
+                </span>
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
+                Criado em
+              </dt>
+              <dd className="text-[13px] text-[var(--color-text)]">
+                {formatDateShort(article.createdAt)}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
+                Última edição por
+              </dt>
+              <dd className="flex items-center gap-2">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                  style={{ backgroundColor: 'var(--color-surface-raised)', color: 'var(--color-text-muted)' }}
+                >
+                  {(article.lastEditor?.completeName || article.updatedBy?.completeName || '?').charAt(0).toUpperCase()}
+                </div>
+                <span className="text-[13px] font-medium text-[var(--color-text)]">
+                  {article.lastEditor?.completeName || article.updatedBy?.completeName || 'Sistema / Nenhuma'}
+                </span>
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-[11px] font-semibold text-[var(--color-text-faint)] mb-0.5">
+                Última edição data
+              </dt>
+              <dd className="text-[13px] text-[var(--color-text)]">
+                {formatDateTime(article.updatedAt || article.createdAt)}
+              </dd>
+            </div>
             {/* RB023: Tempo estimado — campo "estimatedTimeInMinutes" do backend */}
             {article.estimatedTimeInMinutes && (
               <div>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { TagIcon, Check, X, Search } from 'lucide-react';
-import type { Tag } from '../../../features/knowledge-base/types';
+import { TagIcon, Check, X } from 'lucide-react';
+import type { Tag } from '../../features/knowledge-base/types';
 
 interface TagComboboxProps {
   allTags: Tag[];

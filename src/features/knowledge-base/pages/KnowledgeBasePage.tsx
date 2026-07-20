@@ -7,7 +7,7 @@ import {
   Eye,
   Folder,
   Heart,
-  Image,
+
   Loader2,
   Plus,
   Search,
@@ -36,17 +36,12 @@ import { useHasRole } from '../../../lib/useHasRole';
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+function timeAgo(iso?: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso).getTime();
+  if (isNaN(date)) return '';
+  const diff = Date.now() - date;
   const mins = Math.floor(diff / 60_000);
   if (mins < 60) return `há ${mins}min`;
   const hrs = Math.floor(mins / 60);
@@ -61,9 +56,9 @@ function timeAgo(iso: string): string {
 // ── Status Badge ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }: { status: number }) => {
   const cfg: Record<number, { label: string; cls: string }> = {
-    [ArticleStatus.Draft]:     { label: ARTICLE_STATUS_LABELS[0], cls: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]' },
-    [ArticleStatus.Published]: { label: ARTICLE_STATUS_LABELS[1], cls: 'bg-[var(--color-success-subtle)] text-[var(--color-success)]' },
-    [ArticleStatus.Archived]:  { label: ARTICLE_STATUS_LABELS[2], cls: 'bg-[var(--color-surface-dim)] text-[var(--color-text-faint)]' },
+    [ArticleStatus.Draft]:     { label: ARTICLE_STATUS_LABELS[1], cls: 'bg-[var(--color-warning-subtle)] text-[var(--color-warning)]' },
+    [ArticleStatus.Published]: { label: ARTICLE_STATUS_LABELS[2], cls: 'bg-[var(--color-success-subtle)] text-[var(--color-success)]' },
+    [ArticleStatus.Archived]:  { label: ARTICLE_STATUS_LABELS[3], cls: 'bg-[var(--color-surface-dim)] text-[var(--color-text-faint)]' },
   };
   const c = cfg[status] ?? cfg[ArticleStatus.Draft];
   return (

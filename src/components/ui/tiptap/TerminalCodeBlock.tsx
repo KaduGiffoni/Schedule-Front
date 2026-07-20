@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { NodeViewWrapper, NodeViewContent } from '@tiptap/react';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Copy, Check } from 'lucide-react';
 import CodeBlock from '@tiptap/extension-code-block';
 import { ReactNodeViewRenderer } from '@tiptap/react';
@@ -97,7 +97,6 @@ const CodeBlockComponent = ({ node }: any) => {
 
         {/* Editable content — NodeViewContent must remain visible for editing */}
         <NodeViewContent
-          as="code"
           className="kb-terminal-code flex-1"
           style={{
             fontFamily: FONT_MONO,

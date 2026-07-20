@@ -181,6 +181,19 @@ export interface ArticleDetail extends ArticleSummary {
   content: string;
   /** RB031: Artigos relacionados por cruzamento de Tags */
   relatedArticles?: ArticleSummary[];
+  /** Autor da última edição */
+  lastEditor?: ArticleAuthor | null;
+  updatedBy?: ArticleAuthor | null;
+}
+
+export interface ArticleHistoryEntry {
+  id?: string;
+  articleId: string;
+  version: number;
+  changeDescription: string;
+  createdAt: string;
+  editor?: ArticleAuthor | null;
+  updatedBy?: ArticleAuthor | null;
 }
 
 /**

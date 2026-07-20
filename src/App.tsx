@@ -16,6 +16,7 @@ import SwapRequestsPage from "./features/swap-requests/pages/SwapRequestsPage";
 import KnowledgeBasePage from "./features/knowledge-base/pages/KnowledgeBasePage";
 import ArticleViewPage from "./features/knowledge-base/pages/ArticleViewPage";
 import ArticleEditorPage from "./features/knowledge-base/pages/ArticleEditorPage";
+import ArticleHistoryPage from "./features/knowledge-base/pages/ArticleHistoryPage";
 import KnowledgeBaseSettingsPage from "./features/knowledge-base/pages/KnowledgeBaseSettingsPage";
 import AdminPage from "./features/admin/pages/AdminPage";
 import HomePage from "./features/home/page/HomePage";
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/base-conhecimento" element={<KnowledgeBasePage />} />
             <Route path="/base-conhecimento/novo" element={<ArticleEditorPage />} />
             <Route path="/base-conhecimento/:id" element={<ArticleViewPage />} />
+            <Route path="/base-conhecimento/:id/historico" element={<ArticleHistoryPage />} />
             <Route path="/base-conhecimento/:id/editar" element={<ArticleEditorPage />} />
             <Route path="/base-conhecimento/configuracoes" element={<KnowledgeBaseSettingsPage />} />
             <Route path="/administracao"   element={<AdminPage />} />

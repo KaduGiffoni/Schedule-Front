@@ -71,18 +71,16 @@ function flattenTree(nodes: CategoryTreeNode[], depth = 0): { id: string; label:
 
 interface FormState {
   title: string;
-  // RB009: campo renomeado para "summary" (alinhado ao DTO do backend)
   summary: string;
   content: string;
   categoryId: string;
   tagIds: string[];
   status: ArticleStatusType;
-  // RB023: nível de dificuldade obrigatório (DifficultyLevel.cs: Basic=1, Intermediate=2, Advanced=3)
   difficulty: DifficultyLevelType;
   coverImageUrl: string;
-  // RB023: campo renomeado para "estimatedTimeInMinutes" (alinhado ao DTO do backend)
+  // FIX: mantido como string em todo o ciclo do formulário — conversão para
+  // number só ocorre no momento do envio ao backend (handleSubmit).
   estimatedTimeInMinutes: string;
-  // RB020: obrigatório em TODA edição (o validator do backend exige NotEmpty)
   changeDescription: string;
 }
 
@@ -90,18 +88,18 @@ type FormErrors = Partial<Record<keyof FormState, string>>;
 
 const INITIAL_FORM: FormState = {
   title: '',
-  summary: '',       // RB009
+  summary: '',
   content: '',
   categoryId: '',
   tagIds: [],
   status: ArticleStatus.Draft,
-  difficulty: DifficultyLevel.Basic, // RB023
+  difficulty: DifficultyLevel.Basic,
   coverImageUrl: '',
-  estimatedTimeInMinutes: '',  // RB023
-  changeDescription: '',       // RB020
+  estimatedTimeInMinutes: '',
+  changeDescription: '',
 };
 
-// RB019: domínios de vídeo permitidos: YouTube, SharePoint e Microsoft Stream
+// RB019: domínios de vídeo permitidos
 const ALLOWED_VIDEO_DOMAINS = [
   'youtube.com',
   'youtu.be',
@@ -110,7 +108,6 @@ const ALLOWED_VIDEO_DOMAINS = [
   'stream.microsoft.com',
 ];
 
-/** RB019: valida se uma URL de vídeo aponta para domínio permitido */
 function isAllowedVideoUrl(url: string): boolean {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./, '');
@@ -120,19 +117,13 @@ function isAllowedVideoUrl(url: string): boolean {
   }
 }
 
-/**
- * RB019: extrai hrefs de todos os links no conteúdo HTML gerado pelo TipTap
- * e verifica se há URLs de vídeo (com extensões típicas ou parâmetros de embed)
- * apontando para domínios não permitidos.
- */
 function validateVideoLinks(htmlContent: string): string | null {
-  // Busca atributos href que contenham padrões de URL de vídeo
-  const hrefMatches = htmlContent.matchAll(/href="([^"]+)"/gi);
+  const matches = htmlContent.matchAll(/(?:href|src)="([^"]+)"/gi);
   const videoPatterns = /(?:youtube|youtu\.be|vimeo|dailymotion|twitch|stream|video)/i;
-  for (const match of hrefMatches) {
+  for (const match of matches) {
     const url = match[1];
     if (videoPatterns.test(url) && !isAllowedVideoUrl(url)) {
-      return `Link de vídeo não permitido detectado. Use apenas YouTube, SharePoint ou Microsoft Stream. URL: ${url}`;
+      return `Link de vídeo não permitido. Use apenas YouTube, SharePoint ou Microsoft Stream. URL: ${url}`;
     }
   }
   return null;
@@ -140,40 +131,48 @@ function validateVideoLinks(htmlContent: string): string | null {
 
 function validate(form: FormState, isEdit: boolean): FormErrors {
   const errors: FormErrors = {};
-  // RB008: título obrigatório, máx 150 chars
   if (!form.title.trim()) errors.title = 'O título é obrigatório.';
   else if (form.title.length > 150) errors.title = 'Máximo 150 caracteres.';
-  // RB009: resumo obrigatório
   if (!form.summary.trim()) errors.summary = 'O resumo é obrigatório.';
   if (!form.content || form.content === '<p></p>' || !form.content.trim())
     errors.content = 'O conteúdo é obrigatório.';
-  // RB010: categoria obrigatória
   if (!form.categoryId) errors.categoryId = 'Selecione uma categoria.';
-  // RB011: mínimo 1 tag
   if (form.tagIds.length === 0) errors.tagIds = 'Selecione pelo menos uma tag.';
-  // RB023: tempo estimado obrigatório e válido
+
+  // FIX: estimatedTimeInMinutes é string — comparação e parse corretos
+  const estMinParsed = parseInt(form.estimatedTimeInMinutes, 10);
   if (!form.estimatedTimeInMinutes || form.estimatedTimeInMinutes === '') {
     errors.estimatedTimeInMinutes = 'O tempo estimado é obrigatório.';
-  } else if (isNaN(Number(form.estimatedTimeInMinutes)) || Number(form.estimatedTimeInMinutes) < 1) {
+  } else if (isNaN(estMinParsed) || estMinParsed < 1) {
     errors.estimatedTimeInMinutes = 'Informe um número válido (≥ 1).';
   }
-  // RB020: changeDescription obrigatório em TODA edição (o backend exige NotEmpty())
+
   if (isEdit && !form.changeDescription.trim())
     errors.changeDescription = 'Descreva a alteração para o log de auditoria (obrigatório em toda edição).';
-  // RB019: validar URLs de vídeo no conteúdo
   const videoError = validateVideoLinks(form.content);
   if (videoError) errors.content = videoError;
   return errors;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTES UTILITÁRIOS
+// UTILITÁRIO: ajustar tempo estimado via botões +/-
+// FIX: opera sempre em string para manter consistência com FormState
+// ─────────────────────────────────────────────────────────────────────────────
+function adjustMinutes(current: string, delta: number): string {
+  const parsed = parseInt(current, 10);
+  const base = isNaN(parsed) ? 0 : parsed;
+  const next = Math.max(1, base + delta);
+  return String(next);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUB-COMPONENTES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FieldError = ({ message }: { message?: string }) =>
   message ? (
     <div
-      className="flex items-center gap-1.5 text-[12px] font-medium mt-1"
+      className="flex items-center gap-1.5 text-[12px] font-medium mt-1.5"
       style={{ color: 'var(--color-error)' }}
       role="alert"
     >
@@ -205,7 +204,32 @@ const SectionLabel = ({
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INLINE MODAL — criar Categoria
+// INDICADOR DE PROGRESSO DO FORMULÁRIO
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FormProgress {
+  filled: number;
+  total: number;
+  percent: number;
+}
+
+function useFormProgress(form: FormState, isEdit: boolean): FormProgress {
+  const checks = [
+    form.title.trim().length > 0,
+    form.summary.trim().length > 0,
+    form.content.trim().length > 0 && form.content !== '<p></p>',
+    form.categoryId !== '',
+    form.tagIds.length > 0,
+    parseInt(form.estimatedTimeInMinutes, 10) >= 1,
+    !isEdit || form.changeDescription.trim().length > 0,
+  ];
+  const filled = checks.filter(Boolean).length;
+  const total = checks.length;
+  return { filled, total, percent: Math.round((filled / total) * 100) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODAL — criar Categoria
 // ─────────────────────────────────────────────────────────────────────────────
 
 function CreateCategoryModal({
@@ -223,10 +247,10 @@ function CreateCategoryModal({
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
+  // FIX: usar onClick no lugar de onSubmit em <form> para evitar re-render
+  // desnecessário e garantir compatibilidade com React strict mode
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -248,39 +272,32 @@ function CreateCategoryModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'oklch(0% 0 0 / 50%)' }}
+      style={{ backgroundColor: 'oklch(0% 0 0 / 55%)', backdropFilter: 'blur(2px)' }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="w-full max-w-[400px] rounded-[14px] shadow-2xl"
+        className="w-full max-w-[400px] rounded-[16px] shadow-2xl"
         style={{
           backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-border)',
-          animation: 'modal-enter 200ms var(--ease-out-expo) both',
+          animation: 'modal-enter 180ms cubic-bezier(0.16,1,0.3,1) both',
         }}
       >
         <style>{`
           @keyframes modal-enter {
-            from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+            from { opacity: 0; transform: translateY(-10px) scale(0.97); }
             to   { opacity: 1; transform: translateY(0) scale(1); }
           }
         `}</style>
-
-        {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-4 border-b"
           style={{ borderColor: 'var(--color-border-subtle)' }}
         >
           <div className="flex items-center gap-2">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: 'var(--color-accent-dim)' }}
-            >
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-accent-dim)' }}>
               <FolderPlus size={14} style={{ color: 'var(--color-accent)' }} />
             </div>
-            <p className="text-[14px] font-bold" style={{ color: 'var(--color-text)' }}>
-              Nova Categoria
-            </p>
+            <p className="text-[14px] font-bold" style={{ color: 'var(--color-text)' }}>Nova Categoria</p>
           </div>
           <button
             onClick={onClose}
@@ -292,8 +309,6 @@ function CreateCategoryModal({
             <X size={15} />
           </button>
         </div>
-
-        {/* Body */}
         <form onSubmit={handleCreate} className="p-5 flex flex-col gap-4">
           <div>
             <SectionLabel required>Nome da categoria</SectionLabel>
@@ -302,7 +317,7 @@ function CreateCategoryModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Redes, Segurança, Infraestrutura..."
-              className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none transition-colors"
+              className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none transition-all"
               style={{
                 backgroundColor: 'var(--color-surface-dim)',
                 border: '1px solid var(--color-border)',
@@ -312,7 +327,6 @@ function CreateCategoryModal({
               onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
             />
           </div>
-
           {categoryFlat.length > 0 && (
             <div>
               <SectionLabel>Subcategoria de (opcional)</SectionLabel>
@@ -328,24 +342,13 @@ function CreateCategoryModal({
               >
                 <option value="">Nenhuma (raiz)</option>
                 {categoryFlat.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
+                  <option key={c.id} value={c.id}>{c.label}</option>
                 ))}
               </select>
             </div>
           )}
-
           <div className="flex gap-3 pt-1">
-            <Button
-              type="button"
-              variant="outline"
-              fullWidth
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
+            <Button type="button" variant="outline" fullWidth onClick={onClose} disabled={loading}>Cancelar</Button>
             <Button type="submit" fullWidth isLoading={loading} disabled={!name.trim() || loading}>
               <FolderPlus size={14} />
               Criar Categoria
@@ -358,24 +361,16 @@ function CreateCategoryModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INLINE MODAL — criar Tag
+// MODAL — criar Tag
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CreateTagModal({
-  onCreated,
-  onClose,
-}: {
-  onCreated: (tag: Tag) => void;
-  onClose: () => void;
-}) {
+function CreateTagModal({ onCreated, onClose }: { onCreated: (tag: Tag) => void; onClose: () => void }) {
   const showToast = useToastStore((s) => s.showToast);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -395,32 +390,26 @@ function CreateTagModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'oklch(0% 0 0 / 50%)' }}
+      style={{ backgroundColor: 'oklch(0% 0 0 / 55%)', backdropFilter: 'blur(2px)' }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
-        className="w-full max-w-[360px] rounded-[14px] shadow-2xl"
+        className="w-full max-w-[360px] rounded-[16px] shadow-2xl"
         style={{
           backgroundColor: 'var(--color-surface)',
           border: '1px solid var(--color-border)',
-          animation: 'modal-enter 200ms var(--ease-out-expo) both',
+          animation: 'modal-enter 180ms cubic-bezier(0.16,1,0.3,1) both',
         }}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-4 border-b"
           style={{ borderColor: 'var(--color-border-subtle)' }}
         >
           <div className="flex items-center gap-2">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: 'var(--color-accent-dim)' }}
-            >
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--color-accent-dim)' }}>
               <TagIcon size={13} style={{ color: 'var(--color-accent)' }} />
             </div>
-            <p className="text-[14px] font-bold" style={{ color: 'var(--color-text)' }}>
-              Nova Tag
-            </p>
+            <p className="text-[14px] font-bold" style={{ color: 'var(--color-text)' }}>Nova Tag</p>
           </div>
           <button
             onClick={onClose}
@@ -432,8 +421,6 @@ function CreateTagModal({
             <X size={15} />
           </button>
         </div>
-
-        {/* Body */}
         <form onSubmit={handleCreate} className="p-5 flex flex-col gap-4">
           <div>
             <SectionLabel required>Nome da tag</SectionLabel>
@@ -442,7 +429,7 @@ function CreateTagModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Cisco, OSPF, Firewall..."
-              className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none transition-colors"
+              className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none transition-all"
               style={{
                 backgroundColor: 'var(--color-surface-dim)',
                 border: '1px solid var(--color-border)',
@@ -452,11 +439,8 @@ function CreateTagModal({
               onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
             />
           </div>
-
           <div className="flex gap-3 pt-1">
-            <Button type="button" variant="outline" fullWidth onClick={onClose} disabled={loading}>
-              Cancelar
-            </Button>
+            <Button type="button" variant="outline" fullWidth onClick={onClose} disabled={loading}>Cancelar</Button>
             <Button type="submit" fullWidth isLoading={loading} disabled={!name.trim() || loading}>
               <TagIcon size={13} />
               Criar Tag
@@ -469,6 +453,33 @@ function CreateTagModal({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// BARRA DE PROGRESSO LATERAL
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ProgressRing({ percent }: { percent: number }) {
+  const r = 14;
+  const circ = 2 * Math.PI * r;
+  const dash = (percent / 100) * circ;
+  const color = percent === 100 ? 'var(--color-success, #22c55e)' : 'var(--color-accent)';
+  return (
+    <svg width="36" height="36" viewBox="0 0 36 36">
+      <circle cx="18" cy="18" r={r} fill="none" stroke="var(--color-border)" strokeWidth="3" />
+      <circle
+        cx="18" cy="18" r={r} fill="none"
+        stroke={color} strokeWidth="3"
+        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeLinecap="round"
+        transform="rotate(-90 18 18)"
+        style={{ transition: 'stroke-dasharray 0.4s ease, stroke 0.3s ease' }}
+      />
+      <text x="18" y="22" textAnchor="middle" fontSize="9" fontWeight="700" fill={color}>
+        {percent}%
+      </text>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -476,32 +487,34 @@ export default function ArticleEditorPage() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const showToast = useToastStore((s) => s.showToast);
-  // RB002/RB003: só Admin ou Manager podem criar/editar artigos
   const canEdit = useHasRole('Admin', 'Manager');
-
   const isEdit = Boolean(id);
 
-  // ── Loading states ──────────────────────────────────────────────────────────
+  // ── Estados de carregamento ────────────────────────────────────────────────
   const [isLoadingArticle, setIsLoadingArticle] = useState(isEdit);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoadingMeta, setIsLoadingMeta] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // ── Form ────────────────────────────────────────────────────────────────────
+  // ── Formulário ─────────────────────────────────────────────────────────────
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [errors, setErrors] = useState<FormErrors>({});
   const [slugPreview, setSlugPreview] = useState('');
   const [slugManual, setSlugManual] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
 
-  // ── Meta data ───────────────────────────────────────────────────────────────
+  // ── Dados auxiliares ───────────────────────────────────────────────────────
   const [categoryFlat, setCategoryFlat] = useState<{ id: string; label: string }[]>([]);
   const [allTags, setAllTags] = useState<Tag[]>([]);
 
-  // ── Modals ──────────────────────────────────────────────────────────────────
+  // ── Modais ─────────────────────────────────────────────────────────────────
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [showCreateTag, setShowCreateTag] = useState(false);
 
-  // ── Guard de role ───────────────────────────────────────────────────────────
+  // ── Progresso ──────────────────────────────────────────────────────────────
+  const progress = useFormProgress(form, isEdit);
+
+  // ── Guard de role ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!canEdit) {
       showToast('Sem permissão para aceder ao editor.', 'error');
@@ -509,7 +522,19 @@ export default function ArticleEditorPage() {
     }
   }, [canEdit, navigate, showToast]);
 
-  // ── Carregar categorias + tags ──────────────────────────────────────────────
+  // ── Aviso ao sair com alterações não salvas ────────────────────────────────
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
+  // ── Carregar categorias + tags ─────────────────────────────────────────────
   const loadMeta = useCallback(async () => {
     setIsLoadingMeta(true);
     try {
@@ -526,12 +551,9 @@ export default function ArticleEditorPage() {
     }
   }, [showToast]);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadMeta();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadMeta(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Carregar artigo (modo edição) ───────────────────────────────────────────
+  // ── Carregar artigo (modo edição) ──────────────────────────────────────────
   useEffect(() => {
     if (!isEdit || !id) return;
     const load = async () => {
@@ -541,18 +563,22 @@ export default function ArticleEditorPage() {
         const data: ArticleDetail = await knowledgeBaseService.articles.getById(id);
         setForm({
           title: data.title,
-          summary: data.summary ?? '',          // RB009: campo "summary" do backend
+          summary: data.summary ?? '',
           content: data.content,
-          categoryId: data.category?.id ?? '',
+          categoryId: data.category?.id ?? (data as any).categoryId ?? '',
           tagIds: (data.tags ?? []).map((t) => t.id),
           status: data.status,
-          difficulty: data.difficulty ?? DifficultyLevel.Basic, // RB023
-          coverImageUrl: data.coverImageUrl ?? '',
-          estimatedTimeInMinutes: data.estimatedTimeInMinutes?.toString() ?? '', // RB023
-          changeDescription: '',   // RB020: sempre limpar ao abrir o editor
+          difficulty: data.difficulty ?? DifficultyLevel.Basic,
+          coverImageUrl: data.coverImageUrl ?? (data as any).imageUrl ?? (data as any).coverImage ?? '',
+          // FIX: conversão explícita para string ao hidratar o formulário
+          estimatedTimeInMinutes: data.estimatedTimeInMinutes != null
+            ? String(data.estimatedTimeInMinutes)
+            : '',
+          changeDescription: '',
         });
         setSlugPreview(data.slug);
         setSlugManual(true);
+        setIsDirty(false);
       } catch (err) {
         const msg = axios.isAxiosError(err)
           ? err.response?.status === 404
@@ -567,16 +593,16 @@ export default function ArticleEditorPage() {
     load();
   }, [id, isEdit]);
 
-  // ── Auto-slug ────────────────────────────────────────────────────────────────
+  // ── Auto-slug ──────────────────────────────────────────────────────────────
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!slugManual) setSlugPreview(generateSlug(form.title));
   }, [form.title, slugManual]);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const set = useCallback(
     <K extends keyof FormState>(key: K, value: FormState[K]) => {
       setForm((prev) => ({ ...prev, [key]: value }));
+      setIsDirty(true);
       if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
     },
     [errors],
@@ -587,43 +613,51 @@ export default function ArticleEditorPage() {
     const validationErrors = validate(form, isEdit);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
-      showToast('Corrija os erros antes de guardar.', 'error');
-      document.querySelector('[role="alert"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showToast('Corrija os campos destacados antes de publicar.', 'error');
+      // Rolar para o primeiro erro
+      setTimeout(() => {
+        document.querySelector('[role="alert"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 50);
       return;
     }
     setIsSaving(true);
     try {
+      // FIX: conversão para number apenas no momento do envio ao backend
+      const estMinutes = parseInt(form.estimatedTimeInMinutes, 10) || 1;
+
       if (isEdit && id) {
         const payload: UpdateKnowledgeArticleRequest = {
           id,
           title: form.title,
-          summary: form.summary,             // RB009: campo correto do backend
+          summary: form.summary,
           content: form.content,
           categoryId: form.categoryId,
           tagIds: form.tagIds,
           status: form.status,
-          difficulty: form.difficulty,        // RB023: campo obrigatório
-          estimatedTimeInMinutes: Number(form.estimatedTimeInMinutes) || 1, // RB023
+          difficulty: form.difficulty,
+          estimatedTimeInMinutes: estMinutes,
           coverImageUrl: form.coverImageUrl || undefined,
-          changeDescription: form.changeDescription, // RB020: obrigatório em toda edição
+          changeDescription: form.changeDescription,
         };
         await knowledgeBaseService.articles.update(payload);
-        showToast('Artigo atualizado! Nova versão criada.', 'success');
+        showToast('Artigo atualizado — nova versão registada.', 'success');
+        setIsDirty(false);
         navigate(`/base-conhecimento/${id}`);
       } else {
         const payload: CreateKnowledgeArticleRequest = {
           title: form.title,
-          summary: form.summary,              // RB009: campo correto do backend
+          summary: form.summary,
           content: form.content,
           categoryId: form.categoryId,
           tagIds: form.tagIds,
           status: form.status,
-          difficulty: form.difficulty,         // RB023: campo obrigatório
-          estimatedTimeInMinutes: Number(form.estimatedTimeInMinutes) || 1, // RB023
+          difficulty: form.difficulty,
+          estimatedTimeInMinutes: estMinutes,
           coverImageUrl: form.coverImageUrl || undefined,
         };
         const created = await knowledgeBaseService.articles.create(payload);
         showToast('Artigo criado com sucesso!', 'success');
+        setIsDirty(false);
         navigate(`/base-conhecimento/${created.id}`);
       }
     } catch (err) {
@@ -638,7 +672,7 @@ export default function ArticleEditorPage() {
     }
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = useCallback(() => {
     if (!form.title.trim()) {
       showToast('O título é obrigatório para guardar como rascunho.', 'error');
       return;
@@ -649,16 +683,27 @@ export default function ArticleEditorPage() {
         .getElementById('kb-editor-form')
         ?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     }, 0);
-  };
+  }, [form.title, showToast]);
 
-  // ── Categoria criada inline ──────────────────────────────────────────────────
+  const handlePublish = useCallback(() => {
+    setForm((prev) => ({ 
+      ...prev, 
+      status: ArticleStatus.Published,
+      changeDescription: isEdit && !prev.changeDescription.trim() ? 'Publicando artigo' : prev.changeDescription
+    }));
+    setTimeout(() => {
+      document
+        .getElementById('kb-editor-form')
+        ?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    }, 0);
+  }, [isEdit]);
+
   const handleCategoryCreated = (cat: { id: string; label: string }) => {
     setCategoryFlat((prev) => [...prev, cat]);
     set('categoryId', cat.id);
     setShowCreateCategory(false);
   };
 
-  // ── Tag criada inline ────────────────────────────────────────────────────────
   const handleTagCreated = (tag: Tag) => {
     setAllTags((prev) => [...prev, tag]);
     set('tagIds', [...form.tagIds, tag.id]);
@@ -672,9 +717,7 @@ export default function ArticleEditorPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 h-full" style={{ backgroundColor: 'var(--color-bg)' }}>
         <Loader2 size={32} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-        <p className="text-[14px] font-medium" style={{ color: 'var(--color-text-faint)' }}>
-          Carregando artigo...
-        </p>
+        <p className="text-[14px] font-medium" style={{ color: 'var(--color-text-faint)' }}>Carregando artigo...</p>
       </div>
     );
   }
@@ -700,7 +743,7 @@ export default function ArticleEditorPage() {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Modais inline ──────────────────────────────────────────────────── */}
+      {/* ── Modais ─────────────────────────────────────────────────────────── */}
       {showCreateCategory && (
         <CreateCategoryModal
           categoryFlat={categoryFlat}
@@ -719,12 +762,11 @@ export default function ArticleEditorPage() {
         className="flex flex-col h-full overflow-hidden"
         style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'var(--font-sans)' }}
       >
-
         {/* ══════════════════════════════════════════════════════════════════
-            TOPBAR — estilo Confluence
+            TOPBAR
         ══════════════════════════════════════════════════════════════════ */}
         <div
-          className="shrink-0 flex items-center gap-3 px-5 py-0 border-b"
+          className="shrink-0 flex items-center gap-3 px-5 border-b"
           style={{
             backgroundColor: 'var(--color-surface)',
             borderColor: 'var(--color-border)',
@@ -748,10 +790,7 @@ export default function ArticleEditorPage() {
 
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <FileText size={14} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
-            <span
-              className="text-[13px] font-semibold truncate"
-              style={{ color: 'var(--color-text)' }}
-            >
+            <span className="text-[13px] font-semibold truncate" style={{ color: 'var(--color-text)' }}>
               {form.title || (isEdit ? 'Editar Artigo' : 'Novo Artigo')}
             </span>
             {isEdit && (
@@ -762,10 +801,23 @@ export default function ArticleEditorPage() {
                 Edição
               </span>
             )}
+            {/* Indicador de não salvo */}
+            {isDirty && (
+              <span
+                className="shrink-0 w-2 h-2 rounded-full"
+                title="Alterações não salvas"
+                style={{ backgroundColor: 'var(--color-accent)' }}
+              />
+            )}
           </div>
 
           {/* Ações */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Progresso compacto na topbar */}
+            <div className="hidden sm:flex items-center gap-2 mr-1" title={`${progress.filled} de ${progress.total} campos preenchidos`}>
+              <ProgressRing percent={progress.percent} />
+            </div>
+
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -789,12 +841,13 @@ export default function ArticleEditorPage() {
                 <Save size={13} />
                 Rascunho
               </button>
-              <HelpTooltip content="Salva o artigo como rascunho. Ele fica visível apenas para Editores e Administradores." align="right" />
+              <HelpTooltip content="Salva o artigo como rascunho. Visível apenas para Editores e Administradores." align="right" />
             </div>
+
             <div className="flex items-center gap-1">
               <Button
-                type="submit"
-                form="kb-editor-form"
+                type="button"
+                onClick={handlePublish}
                 size="sm"
                 disabled={isSaving || isLoadingMeta}
                 isLoading={isSaving}
@@ -802,7 +855,7 @@ export default function ArticleEditorPage() {
                 <Send size={13} />
                 {isEdit ? 'Publicar Edição' : 'Publicar Artigo'}
               </Button>
-              <HelpTooltip content="Publica o artigo imediatamente, tornando-o visível para todos." align="right" />
+              <HelpTooltip content="Publica o artigo imediatamente, tornando-o visível para todos os usuários." align="right" />
             </div>
           </div>
         </div>
@@ -817,18 +870,16 @@ export default function ArticleEditorPage() {
             noValidate
             className={`flex-1 flex overflow-hidden transition-opacity duration-300 ${isSaving ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}
           >
-
             {/* ── COLUNA PRINCIPAL ─────────────────────────────────────── */}
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-4xl mx-auto px-10 py-10">
 
-                {/* Título — estilo Confluence: grande, limpo */}
+                {/* ── Título — estilo Confluence ───────────────────────── */}
                 <div className="mb-6">
                   <textarea
                     id="kb-title"
                     value={form.title}
                     onChange={(e) => {
-                      // Auto-resize
                       e.target.style.height = 'auto';
                       e.target.style.height = e.target.scrollHeight + 'px';
                       set('title', e.target.value);
@@ -841,7 +892,7 @@ export default function ArticleEditorPage() {
                     maxLength={150}
                     rows={1}
                     placeholder="Título do artigo"
-                    className="w-full resize-none overflow-hidden text-[32px] font-bold leading-tight placeholder:text-[var(--color-border)] focus:outline-none bg-transparent"
+                    className="w-full resize-none overflow-hidden text-[32px] font-bold leading-tight placeholder:opacity-20 focus:outline-none bg-transparent"
                     style={{
                       color: 'var(--color-text)',
                       border: 'none',
@@ -854,8 +905,8 @@ export default function ArticleEditorPage() {
                       <FieldError message={errors.title} />
                     ) : (
                       <div
-                        className="flex items-center gap-1.5 text-[14px] font-mono"
-                        style={{ color: 'var(--color-text-faint)', opacity: 0.7 }}
+                        className="flex items-center gap-1 text-[13px] font-mono select-none"
+                        style={{ color: 'var(--color-text-faint)', opacity: 0.65 }}
                       >
                         <span style={{ opacity: 0.5 }}>/base-conhecimento/</span>
                         <span style={{ color: 'var(--color-accent)' }}>
@@ -864,37 +915,35 @@ export default function ArticleEditorPage() {
                       </div>
                     )}
                     <span
-                      className="text-[11px] shrink-0 ml-4"
+                      className="text-[11px] shrink-0 ml-4 tabular-nums"
                       style={{ color: form.title.length > 140 ? 'var(--color-error)' : 'var(--color-text-faint)' }}
                     >
                       {form.title.length}/150
                     </span>
                   </div>
-                  {/* Linha divisória Confluence */}
                   <div className="mt-4 mb-6" style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
                 </div>
 
-                {/* Resumo — RB009 */}
+                {/* ── Resumo — RB009 ───────────────────────────────────── */}
                 <div className="mb-6">
                   <SectionLabel required>Resumo</SectionLabel>
+                  <p className="text-[12px] mb-2 leading-relaxed" style={{ color: 'var(--color-text-faint)' }}>
+                    Descreva em 1–3 frases o que este artigo ensina. Aparece nos resultados de pesquisa e em listagens.
+                  </p>
                   <textarea
                     id="kb-summary"
                     value={form.summary}
                     onChange={(e) => set('summary', e.target.value)}
-                    placeholder="Descreva em 1-3 frases o que este artigo ensina. Aparece nos resultados de pesquisa."
+                    placeholder="Ex: Este artigo explica como configurar Port Security no Cisco Catalyst para restringir acesso por MAC address..."
                     rows={2}
-                    className="w-full px-3 py-2.5 text-[14px] rounded-[8px] resize-none focus:outline-none kb-transition-border"
+                    className="w-full px-3 py-2.5 text-[14px] rounded-[8px] resize-none focus:outline-none transition-all"
                     style={{
                       backgroundColor: 'var(--color-surface)',
                       border: `1px solid ${errors.summary ? 'var(--color-error)' : 'var(--color-border)'}`,
                       color: 'var(--color-text)',
                     }}
-                    onFocus={(e) => {
-                      if (!errors.summary) e.currentTarget.style.borderColor = 'var(--color-accent)';
-                    }}
-                    onBlur={(e) => {
-                      if (!errors.summary) e.currentTarget.style.borderColor = 'var(--color-border)';
-                    }}
+                    onFocus={(e) => { if (!errors.summary) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                    onBlur={(e) => { if (!errors.summary) e.currentTarget.style.borderColor = 'var(--color-border)'; }}
                   />
                   <FieldError message={errors.summary} />
                 </div>
@@ -907,58 +956,95 @@ export default function ArticleEditorPage() {
                     onChange={(html) => set('content', html)}
                     className="flex-1"
                     style={{
-                      border: errors.content ? '2px solid var(--color-error)' : '1px solid var(--color-border)',
-                      boxShadow: 'none', // Remove shadow to fit inside if needed, or keep default
+                      border: errors.content
+                        ? '2px solid var(--color-error)'
+                        : '1px solid var(--color-border)',
                     }}
                   />
                   <FieldError message={errors.content} />
                 </div>
 
-                {/* ── Log de auditoria (modo edição) — RB020 ───────────── */}
-                {/* RB020: changeDescription obrigatório em TODA edição (backend valida NotEmpty) */}
+                {/* ── Log de Auditoria — RB020 ─────────────────────────── */}
                 {isEdit && (
                   <div
-                    className="mt-8 p-4 rounded-[8px] border"
-                    style={{ backgroundColor: 'var(--color-warning-subtle)', borderColor: 'var(--color-warning)' }}
+                    className="mt-8 p-4 rounded-[10px] border"
+                    style={{
+                      backgroundColor: 'var(--color-warning-subtle)',
+                      borderColor: 'var(--color-warning)',
+                    }}
                   >
-                    <p className="text-[12px] font-bold mb-2 flex items-center gap-1.5" style={{ color: 'var(--color-warning)' }}>
+                    <p className="text-[12px] font-bold mb-1 flex items-center gap-1.5" style={{ color: 'var(--color-warning)' }}>
                       <CheckCircle2 size={13} />
-                      Log de Auditoria (obrigatório em toda edição)
+                      Log de Auditoria
+                      <span className="font-normal ml-0.5" style={{ color: 'var(--color-text-faint)' }}>— obrigatório em toda edição</span>
+                    </p>
+                    <p className="text-[11px] mb-2 leading-relaxed" style={{ color: 'var(--color-text-faint)' }}>
+                      Descreva sucintamente o que foi alterado. Esta mensagem fica registada no histórico de versões do artigo (RB020).
                     </p>
                     <textarea
                       id="kb-change-description"
                       value={form.changeDescription}
                       onChange={(e) => set('changeDescription', e.target.value)}
-                      placeholder="Ex: Corrigido o passo 3. Adicionado exemplo de configuração de VLAN 100."
+                      placeholder="Ex: Corrigido o passo 3 — o comando correto é 'switchport port-security'. Adicionado exemplo de VLAN 100."
                       rows={2}
-                      className="w-full px-3 py-2 text-[13px] rounded-[6px] resize-none focus:outline-none kb-transition-border"
+                      className="w-full px-3 py-2 text-[13px] rounded-[6px] resize-none focus:outline-none transition-all"
                       style={{
                         backgroundColor: 'var(--color-surface)',
                         border: `1px solid ${errors.changeDescription ? 'var(--color-error)' : 'var(--color-warning)'}`,
                         color: 'var(--color-text)',
                       }}
+                      onFocus={(e) => { if (!errors.changeDescription) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                      onBlur={(e) => { if (!errors.changeDescription) e.currentTarget.style.borderColor = errors.changeDescription ? 'var(--color-error)' : 'var(--color-warning)'; }}
                     />
                     <FieldError message={errors.changeDescription} />
-                    <p className="text-[11px] mt-1.5" style={{ color: 'var(--color-text-faint)' }}>
-                      Obrigatório — fica registado no histórico de versões (RB020).
-                    </p>
                   </div>
                 )}
 
-                {/* Padding de fundo */}
                 <div className="h-16" />
               </div>
             </div>
 
             {/* ── SIDEBAR DIREITA ───────────────────────────────────────── */}
             <div
-              className="shrink-0 overflow-y-auto flex flex-col gap-4 px-4 pt-5 pb-4"
+              className="shrink-0 overflow-y-auto flex flex-col gap-4 px-4 pt-5 pb-6"
               style={{
-                width: '280px',
+                width: '284px',
                 borderLeft: '1px solid var(--color-border)',
                 backgroundColor: 'var(--color-surface)',
               }}
             >
+
+              {/* Progresso detalhado */}
+              <div
+                className="rounded-[10px] p-3"
+                style={{ backgroundColor: 'var(--color-surface-dim)', border: '1px solid var(--color-border-subtle)' }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text-faint)' }}>
+                    Completude do Artigo
+                  </span>
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: progress.percent === 100 ? 'var(--color-success, #22c55e)' : 'var(--color-accent)' }}>
+                    {progress.filled}/{progress.total}
+                  </span>
+                </div>
+                <div className="w-full rounded-full overflow-hidden" style={{ height: '5px', backgroundColor: 'var(--color-border)' }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${progress.percent}%`,
+                      backgroundColor: progress.percent === 100 ? 'var(--color-success, #22c55e)' : 'var(--color-accent)',
+                      transition: 'width 0.4s ease, background-color 0.3s ease',
+                    }}
+                  />
+                </div>
+                {progress.percent === 100 && (
+                  <p className="text-[10px] mt-1.5 font-semibold" style={{ color: 'var(--color-success, #22c55e)' }}>
+                    ✓ Pronto para publicar
+                  </p>
+                )}
+              </div>
+
+              <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
 
               {/* Status */}
               <div>
@@ -975,15 +1061,13 @@ export default function ArticleEditorPage() {
                   }}
                 >
                   {Object.entries(ARTICLE_STATUS_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
-                    </option>
+                    <option key={val} value={val}>{label}</option>
                   ))}
                 </select>
                 <p className="text-[11px] mt-1 leading-snug" style={{ color: 'var(--color-text-faint)' }}>
                   {form.status === ArticleStatus.Published
-                    ? '✓ Ficará visível publicamente.'
-                    : 'Rascunho — só Editores/Admins.'}
+                    ? '✓ Ficará visível publicamente após publicar.'
+                    : 'Rascunho — visível apenas para Editores e Admins.'}
                 </p>
               </div>
 
@@ -993,31 +1077,25 @@ export default function ArticleEditorPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <SectionLabel required className="mb-0">
-                    <span className="flex items-center gap-1">
-                      <Folder size={10} />
-                      Categoria
-                    </span>
+                    <span className="flex items-center gap-1"><Folder size={10} />Categoria</span>
                   </SectionLabel>
                   <button
                     type="button"
                     onClick={() => setShowCreateCategory(true)}
-                    className="flex items-center gap-1 text-[10px] font-bold transition-colors"
+                    className="flex items-center gap-1 text-[10px] font-bold transition-opacity"
                     style={{ color: 'var(--color-accent)' }}
                     title="Criar nova categoria"
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.7')}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.65')}
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
                   >
-                    <Plus size={10} />
-                    Nova
+                    <Plus size={10} />Nova
                   </button>
                 </div>
 
                 {isLoadingMeta ? (
                   <div className="flex items-center gap-2 h-[36px]">
                     <Loader2 size={13} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-                    <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
-                      Carregando...
-                    </span>
+                    <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>Carregando...</span>
                   </div>
                 ) : categoryFlat.length === 0 ? (
                   <button
@@ -1038,7 +1116,7 @@ export default function ArticleEditorPage() {
                     id="kb-category"
                     value={form.categoryId}
                     onChange={(e) => set('categoryId', e.target.value)}
-                    className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none cursor-pointer kb-transition-border"
+                    className="w-full h-[38px] px-3 text-[13px] rounded-[7px] focus:outline-none cursor-pointer"
                     style={{
                       backgroundColor: 'var(--color-surface-dim)',
                       border: `1px solid ${errors.categoryId ? 'var(--color-error)' : 'var(--color-border)'}`,
@@ -1049,9 +1127,7 @@ export default function ArticleEditorPage() {
                   >
                     <option value="">Selecione...</option>
                     {categoryFlat.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {cat.label}
-                      </option>
+                      <option key={cat.id} value={cat.id}>{cat.label}</option>
                     ))}
                   </select>
                 )}
@@ -1064,31 +1140,25 @@ export default function ArticleEditorPage() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <SectionLabel required className="mb-0">
-                    <span className="flex items-center gap-1">
-                      <TagIcon size={10} />
-                      Tags
-                    </span>
+                    <span className="flex items-center gap-1"><TagIcon size={10} />Tags</span>
                   </SectionLabel>
                   <button
                     type="button"
                     onClick={() => setShowCreateTag(true)}
-                    className="flex items-center gap-1 text-[10px] font-bold transition-colors"
+                    className="flex items-center gap-1 text-[10px] font-bold transition-opacity"
                     style={{ color: 'var(--color-accent)' }}
                     title="Criar nova tag"
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.7')}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.65')}
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
                   >
-                    <Plus size={10} />
-                    Nova
+                    <Plus size={10} />Nova
                   </button>
                 </div>
 
                 {isLoadingMeta ? (
                   <div className="flex items-center gap-2">
                     <Loader2 size={13} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-                    <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>
-                      Carregando...
-                    </span>
+                    <span className="text-[12px]" style={{ color: 'var(--color-text-faint)' }}>Carregando...</span>
                   </div>
                 ) : allTags.length === 0 ? (
                   <button
@@ -1105,8 +1175,10 @@ export default function ArticleEditorPage() {
                     Criar primeira tag
                   </button>
                 ) : (
-                  <TagCombobox 
-                    allTags={form.categoryId ? allTags.filter(t => !t.categoryId || t.categoryId === form.categoryId) : allTags}
+                  <TagCombobox
+                    allTags={form.categoryId
+                      ? allTags.filter((t) => !t.categoryId || t.categoryId === form.categoryId)
+                      : allTags}
                     selectedTagIds={form.tagIds}
                     onChange={(tagIds) => set('tagIds', tagIds)}
                     error={errors.tagIds}
@@ -1124,12 +1196,7 @@ export default function ArticleEditorPage() {
 
               {/* Nível de Dificuldade — RB023 */}
               <div>
-                <SectionLabel required>
-                  <span className="flex items-center gap-1">
-                    Nível de Dificuldade
-                  </span>
-                </SectionLabel>
-                {/* RB023: DifficultyLevel obrigatório (backend valida IsInEnum) */}
+                <SectionLabel required>Nível de Dificuldade</SectionLabel>
                 <select
                   id="kb-difficulty"
                   value={form.difficulty}
@@ -1142,21 +1209,21 @@ export default function ArticleEditorPage() {
                   }}
                 >
                   {Object.entries(DIFFICULTY_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}
-                    </option>
+                    <option key={val} value={val}>{label}</option>
                   ))}
                 </select>
-                <p className="text-[11px] mt-1" style={{ color: 'var(--color-text-faint)' }}>
-                  {form.difficulty === 1 ? 'Para operações rotineiras simples.' :
-                   form.difficulty === 2 ? 'Requer conhecimento prévio moderado.' :
-                   'Para especialistas — configurações complexas.'}
+                <p className="text-[11px] mt-1 leading-snug" style={{ color: 'var(--color-text-faint)' }}>
+                  {form.difficulty === 1
+                    ? 'Para operações rotineiras e simples.'
+                    : form.difficulty === 2
+                    ? 'Requer conhecimento prévio moderado.'
+                    : 'Para especialistas — configurações complexas.'}
                 </p>
               </div>
 
               <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
 
-              {/* Tempo de leitura — RB023 */}
+              {/* Tempo estimado — RB023 */}
               <div>
                 <SectionLabel required>
                   <span className="flex items-center gap-1">
@@ -1164,43 +1231,61 @@ export default function ArticleEditorPage() {
                     Tempo Estimado (min)
                   </span>
                 </SectionLabel>
-                <div 
-                  className="flex items-center w-full h-[36px] px-3 rounded-[7px] focus-within:border-[var(--color-accent)] kb-transition-border"
+                <div
+                  className="flex items-center w-full h-[36px] px-3 rounded-[7px] transition-all"
                   style={{
                     backgroundColor: 'var(--color-surface-dim)',
                     border: `1px solid ${errors.estimatedTimeInMinutes ? 'var(--color-error)' : 'var(--color-border)'}`,
                   }}
+                  // FIX: focus-within via inline é impossível em React sem estado;
+                  // usamos a pseudo-classe nativa do CSS via className abaixo:
+                  tabIndex={-1}
                 >
+                  {/* FIX PRINCIPAL: input type="text" + inputMode="numeric" para
+                      manter FormState como string e evitar todos os erros TS.
+                      O onChange trata apenas strings; a conversão para number
+                      ocorre somente no handleSubmit. */}
                   <input
                     id="kb-reading-time"
-                    type="number"
-                    min={1}
-                    max={480}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     placeholder="5"
-                    value={form.estimatedTimeInMinutes || ''}
-                    onChange={(e) => set('estimatedTimeInMinutes', Number(e.target.value))}
-                    className="flex-1 bg-transparent focus:outline-none text-[13px] kb-no-spinners"
+                    value={form.estimatedTimeInMinutes}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      set('estimatedTimeInMinutes', raw);
+                    }}
+                    className="flex-1 bg-transparent focus:outline-none text-[13px]"
                     style={{ color: 'var(--color-text)' }}
                   />
-                  <span className="text-[13px] mr-2 select-none" style={{ color: 'var(--color-text-muted)' }}>
-                    {form.estimatedTimeInMinutes === 1 ? 'minuto' : 'minutos'}
+                  <span className="text-[12px] mr-2 select-none" style={{ color: 'var(--color-text-muted)' }}>
+                    {parseInt(form.estimatedTimeInMinutes, 10) === 1 ? 'minuto' : 'minutos'}
                   </span>
-                  <div className="flex flex-col ml-1 border-l border-[var(--color-border)] pl-2 h-full py-1 justify-between">
-                    <button 
-                      type="button" 
+                  <div
+                    className="flex flex-col border-l pl-2 h-full py-1 justify-between"
+                    style={{ borderColor: 'var(--color-border)' }}
+                  >
+                    {/* FIX: botões usam adjustMinutes() — opera em string → string */}
+                    <button
+                      type="button"
                       tabIndex={-1}
-                      onClick={() => set('estimatedTimeInMinutes', (form.estimatedTimeInMinutes || 0) + 1)} 
-                      className="hover:text-white transition-colors"
+                      onClick={() => set('estimatedTimeInMinutes', adjustMinutes(form.estimatedTimeInMinutes, 1))}
+                      className="transition-colors"
                       style={{ color: 'var(--color-text-muted)' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                     >
                       <ChevronUp size={12} strokeWidth={3} />
                     </button>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       tabIndex={-1}
-                      onClick={() => set('estimatedTimeInMinutes', Math.max(1, (form.estimatedTimeInMinutes || 0) - 1))} 
-                      className="hover:text-white transition-colors"
+                      onClick={() => set('estimatedTimeInMinutes', adjustMinutes(form.estimatedTimeInMinutes, -1))}
+                      className="transition-colors"
                       style={{ color: 'var(--color-text-muted)' }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                     >
                       <ChevronDown size={12} strokeWidth={3} />
                     </button>
@@ -1218,7 +1303,7 @@ export default function ArticleEditorPage() {
                   placeholder="https://..."
                   value={form.coverImageUrl}
                   onChange={(e) => set('coverImageUrl', e.target.value)}
-                  className="w-full h-[36px] px-3 text-[13px] rounded-[7px] focus:outline-none"
+                  className="w-full h-[36px] px-3 text-[13px] rounded-[7px] focus:outline-none transition-all"
                   style={{
                     backgroundColor: 'var(--color-surface-dim)',
                     border: '1px solid var(--color-border)',
@@ -1227,32 +1312,72 @@ export default function ArticleEditorPage() {
                   onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
                   onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--color-border)')}
                 />
+                {/* Preview da imagem de capa */}
+                {form.coverImageUrl && (
+                  <div className="mt-2 rounded-[7px] overflow-hidden" style={{ border: '1px solid var(--color-border)' }}>
+                    <img
+                      src={form.coverImageUrl}
+                      alt="Pré-visualização da capa"
+                      className="w-full h-[80px] object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  </div>
+                )}
               </div>
 
               <div style={{ height: '1px', backgroundColor: 'var(--color-border-subtle)' }} />
 
-              {/* Preview do card (se há dados suficientes) */}
+              {/* Pré-visualização do card */}
               {(form.title || selectedCategory) && (
                 <div>
                   <SectionLabel>Pré-visualização</SectionLabel>
                   <div
-                    className="rounded-[8px] p-3 border"
+                    className="rounded-[10px] p-3 border"
                     style={{ backgroundColor: 'var(--color-surface-dim)', borderColor: 'var(--color-border)' }}
                   >
                     {selectedCategory && (
                       <p className="text-[9px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1" style={{ color: 'var(--color-accent)' }}>
                         <Folder size={8} />
-                        {selectedCategory.label}
+                        {selectedCategory.label.trim()}
                       </p>
                     )}
                     <p className="text-[12px] font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)' }}>
                       {form.title || 'Título do artigo'}
                     </p>
-                    {/* RB009: summary (antes era excerpt) */}
                     {form.summary && (
-                      <p className="text-[10px] mt-1 line-clamp-2" style={{ color: 'var(--color-text-muted)' }}>
+                      <p className="text-[10px] mt-1 line-clamp-2 leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
                         {form.summary}
                       </p>
+                    )}
+                    {/* Metadados: dificuldade e tempo */}
+                    {(form.difficulty || form.estimatedTimeInMinutes) && (
+                      <div className="flex items-center gap-2 mt-2">
+                        {form.difficulty && (
+                          <span
+                            className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                            style={{
+                              backgroundColor: form.difficulty === 1
+                                ? 'var(--color-success-subtle, #dcfce7)'
+                                : form.difficulty === 2
+                                ? 'var(--color-warning-subtle)'
+                                : 'var(--color-error-subtle)',
+                              color: form.difficulty === 1
+                                ? 'var(--color-success, #16a34a)'
+                                : form.difficulty === 2
+                                ? 'var(--color-warning)'
+                                : 'var(--color-error)',
+                            }}
+                          >
+                            {DIFFICULTY_LABELS[form.difficulty]}
+                          </span>
+                        )}
+                        {form.estimatedTimeInMinutes && parseInt(form.estimatedTimeInMinutes, 10) >= 1 && (
+                          <span className="flex items-center gap-0.5 text-[9px]" style={{ color: 'var(--color-text-faint)' }}>
+                            <Clock size={8} />
+                            {form.estimatedTimeInMinutes} min
+                          </span>
+                        )}
+                      </div>
                     )}
                     {form.tagIds.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
@@ -1281,7 +1406,7 @@ export default function ArticleEditorPage() {
               )}
 
               {/* Botão principal na sidebar */}
-              <div className="flex items-center gap-1.5 mt-2">
+              <div className="flex items-center gap-1.5 mt-auto pt-2">
                 <div className="flex-1">
                   <Button
                     type="submit"
@@ -1293,8 +1418,8 @@ export default function ArticleEditorPage() {
                     <BookOpen size={14} />
                     {isEdit ? 'Guardar Nova Versão' : 'Salvar Artigo'}
                     <div className="ml-2" onClick={(e) => e.preventDefault()}>
-                      <HelpTooltip 
-                        content="Salva o artigo com o status selecionado acima no painel lateral." 
+                      <HelpTooltip
+                        content="Salva o artigo com o status selecionado acima."
                         align="left"
                       />
                     </div>

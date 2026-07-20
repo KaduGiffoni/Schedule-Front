@@ -202,6 +202,11 @@ body {
   border-radius: var(--radius-xs);
 }
 
+.ProseMirror:focus-visible,
+.kb-editor-prose:focus-visible {
+  outline: none !important;
+}
+
 /* ── Scrollbar customizada ─── */
 * {
   scrollbar-width: thin;
@@ -661,3 +666,188 @@ body {
   transition: border-color 150ms var(--ease-out-expo),
               box-shadow 150ms var(--ease-out-expo);
 }
+
+/* ==========================================================================
+   RichTextEditor Styles (Transferred from editor.css)
+   ========================================================================== */
+
+/* ── Editor Container ────────────────────────────────────────────────────── */
+.kb-editor-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: clip;
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+.kb-editor-content-wrapper {
+  background-color: var(--color-surface);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Toolbar Fixa ────────────────────────────────────────────────────────── */
+.kb-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background-color: var(--color-surface-dim);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.kb-toolbar-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
+  cursor: pointer;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.kb-toolbar-button:hover:not(:disabled) {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.kb-toolbar-button.active {
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  border-color: var(--color-accent);
+}
+
+.kb-toolbar-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.kb-toolbar-divider {
+  width: 1px;
+  align-self: stretch;
+  background-color: var(--color-border);
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+/* ── Bubble Menu ─────────────────────────────────────────────────────────── */
+.bubble-toolbar {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  background: var(--color-surface);
+  border-radius: 8px;
+  box-shadow: var(--shadow-dropdown);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.bubble-toolbar button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+
+.bubble-toolbar button:hover {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.bubble-toolbar button.active {
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+}
+
+/* ── Slash Menu ──────────────────────────────────────────────────────────── */
+.slash-menu {
+  background: var(--color-surface);
+  border-radius: 10px;
+  box-shadow: var(--shadow-dropdown);
+  overflow: hidden;
+  min-width: 260px;
+  padding: 6px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.slash-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background-color 120ms ease-out;
+}
+
+.slash-item:hover,
+.slash-item.is-selected {
+  background: var(--color-surface-raised);
+}
+
+.slash-item-title {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.slash-item-description {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.slash-menu-empty {
+  padding: 10px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+/* ── Drag Handle ─────────────────────────────────────────────────────────── */
+.custom-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--color-border-subtle);
+  cursor: grab;
+  background: transparent;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+.custom-drag-handle:hover {
+  background-color: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.custom-drag-handle:active {
+  cursor: grabbing;
+}
+

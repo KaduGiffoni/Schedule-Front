@@ -1,5 +1,5 @@
 import { ReactRenderer } from "@tiptap/react";
-import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import tippy from "tippy.js";
 import { knowledgeBaseService } from "../../../features/knowledge-base/api/knowledgeBaseService";
 import type { ArticleSummary } from "../../../features/knowledge-base/types";
