@@ -21,6 +21,8 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       console.warn("Sessão expirada. A fazer logout...");
       useAuthStore.getState().logout();
+      // FIX: 9 — Redirecionamento forçado no interceptor 401
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   }

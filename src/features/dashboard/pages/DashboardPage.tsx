@@ -47,23 +47,12 @@ export default function DashboardPage() {
             {["Escala Completa", "Minha Escala"].map((label, i) => (
               <button
                 key={label}
-                className="px-3 py-1.5 text-[13px] font-semibold rounded-[6px] transition-colors duration-120"
-                style={{
-                  backgroundColor: i === 0 ? "var(--color-accent-dim)" : "transparent",
-                  color: i === 0 ? "var(--color-accent-text)" : "var(--color-text-faint)",
-                }}
-                onMouseEnter={(e) => {
-                  if (i !== 0) {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
-                    (e.currentTarget as HTMLElement).style.color = "var(--color-text-muted)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (i !== 0) {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                    (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)";
-                  }
-                }}
+                // FIX: 14 — Uso de classes Tailwind em vez de eventos JS
+                className={`px-3 py-1.5 text-[13px] font-semibold rounded-[6px] transition-colors duration-120 ${
+                  i === 0 
+                    ? "bg-[var(--color-accent-dim)] text-[var(--color-accent-text)]"
+                    : "bg-transparent text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text-muted)]"
+                }`}
               >
                 {label}
               </button>
@@ -121,16 +110,8 @@ export default function DashboardPage() {
                   key={label}
                   onClick={onClick}
                   aria-label={label}
-                  className="p-1.5 rounded-[6px] transition-colors duration-120"
-                  style={{ color: "var(--color-text-faint)" }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = "var(--color-surface-raised)";
-                    (e.currentTarget as HTMLElement).style.color = "var(--color-text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
-                    (e.currentTarget as HTMLElement).style.color = "var(--color-text-faint)";
-                  }}
+                  // FIX: 14 — Uso de classes Tailwind em vez de eventos JS
+                  className="p-1.5 rounded-[6px] transition-colors duration-120 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
                 >
                   <Icon size={18} strokeWidth={2} />
                 </button>

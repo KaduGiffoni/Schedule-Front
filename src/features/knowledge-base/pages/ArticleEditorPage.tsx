@@ -117,6 +117,17 @@ function isAllowedVideoUrl(url: string): boolean {
   }
 }
 
+// FIX: 17 — validação de imagem de capa
+const ALLOWED_IMAGE_DOMAINS = ['sharepoint.com', 'microsoftstream.com'];
+function isAllowedImageUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '');
+    return ALLOWED_IMAGE_DOMAINS.some((d) => hostname === d || hostname.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
 function validateVideoLinks(htmlContent: string): string | null {
   const matches = htmlContent.matchAll(/(?:href|src)="([^"]+)"/gi);
   const videoPatterns = /(?:youtube|youtu\.be|vimeo|dailymotion|twitch|stream|video)/i;
@@ -151,6 +162,10 @@ function validate(form: FormState, isEdit: boolean): FormErrors {
     errors.changeDescription = 'Descreva a alteração para o log de auditoria (obrigatório em toda edição).';
   const videoError = validateVideoLinks(form.content);
   if (videoError) errors.content = videoError;
+  // FIX: 17 — validação de URL da imagem de capa
+  if (form.coverImageUrl && !isAllowedImageUrl(form.coverImageUrl)) {
+    errors.coverImageUrl = 'URL de imagem não permitida (apenas domínios internos permitidos).';
+  }
   return errors;
 }
 
@@ -551,7 +566,8 @@ export default function ArticleEditorPage() {
     }
   }, [showToast]);
 
-  useEffect(() => { loadMeta(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // FIX: 7 — dependência do loadMeta corrigida
+  useEffect(() => { loadMeta(); }, [loadMeta]);
 
   // ── Carregar artigo (modo edição) ──────────────────────────────────────────
   useEffect(() => {
@@ -608,9 +624,11 @@ export default function ArticleEditorPage() {
     [errors],
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // FIX: 3 — Remoção da race condition recebendo status desejado diretamente
+  const handleSubmit = async (e: React.FormEvent, overrideForm?: Partial<FormState>) => {
     e.preventDefault();
-    const validationErrors = validate(form, isEdit);
+    const formToSubmit = { ...form, ...overrideForm };
+    const validationErrors = validate(formToSubmit, isEdit);
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       showToast('Corrija os campos destacados antes de publicar.', 'error');
@@ -628,16 +646,16 @@ export default function ArticleEditorPage() {
       if (isEdit && id) {
         const payload: UpdateKnowledgeArticleRequest = {
           id,
-          title: form.title,
-          summary: form.summary,
-          content: form.content,
-          categoryId: form.categoryId,
-          tagIds: form.tagIds,
-          status: form.status,
-          difficulty: form.difficulty,
+          title: formToSubmit.title,
+          summary: formToSubmit.summary,
+          content: formToSubmit.content,
+          categoryId: formToSubmit.categoryId,
+          tagIds: formToSubmit.tagIds,
+          status: formToSubmit.status,
+          difficulty: formToSubmit.difficulty,
           estimatedTimeInMinutes: estMinutes,
-          coverImageUrl: form.coverImageUrl || undefined,
-          changeDescription: form.changeDescription,
+          coverImageUrl: formToSubmit.coverImageUrl || undefined,
+          changeDescription: formToSubmit.changeDescription,
         };
         await knowledgeBaseService.articles.update(payload);
         showToast('Artigo atualizado — nova versão registada.', 'success');
@@ -645,15 +663,15 @@ export default function ArticleEditorPage() {
         navigate(`/base-conhecimento/${id}`);
       } else {
         const payload: CreateKnowledgeArticleRequest = {
-          title: form.title,
-          summary: form.summary,
-          content: form.content,
-          categoryId: form.categoryId,
-          tagIds: form.tagIds,
-          status: form.status,
-          difficulty: form.difficulty,
+          title: formToSubmit.title,
+          summary: formToSubmit.summary,
+          content: formToSubmit.content,
+          categoryId: formToSubmit.categoryId,
+          tagIds: formToSubmit.tagIds,
+          status: formToSubmit.status,
+          difficulty: formToSubmit.difficulty,
           estimatedTimeInMinutes: estMinutes,
-          coverImageUrl: form.coverImageUrl || undefined,
+          coverImageUrl: formToSubmit.coverImageUrl || undefined,
         };
         const created = await knowledgeBaseService.articles.create(payload);
         showToast('Artigo criado com sucesso!', 'success');
@@ -672,31 +690,24 @@ export default function ArticleEditorPage() {
     }
   };
 
-  const handleSaveDraft = useCallback(() => {
+  const handleSaveDraft = (e: React.MouseEvent) => {
     if (!form.title.trim()) {
       showToast('O título é obrigatório para guardar como rascunho.', 'error');
       return;
     }
-    setForm((prev) => ({ ...prev, status: ArticleStatus.Draft }));
-    setTimeout(() => {
-      document
-        .getElementById('kb-editor-form')
-        ?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    }, 0);
-  }, [form.title, showToast]);
+    const overrides = { status: ArticleStatus.Draft as ArticleStatusType };
+    setForm((prev) => ({ ...prev, ...overrides }));
+    handleSubmit(e as unknown as React.FormEvent, overrides);
+  };
 
-  const handlePublish = useCallback(() => {
-    setForm((prev) => ({ 
-      ...prev, 
-      status: ArticleStatus.Published,
-      changeDescription: isEdit && !prev.changeDescription.trim() ? 'Publicando artigo' : prev.changeDescription
-    }));
-    setTimeout(() => {
-      document
-        .getElementById('kb-editor-form')
-        ?.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    }, 0);
-  }, [isEdit]);
+  const handlePublish = (e: React.MouseEvent) => {
+    const overrides = {
+      status: ArticleStatus.Published as ArticleStatusType,
+      changeDescription: isEdit && !form.changeDescription.trim() ? 'Publicando artigo' : form.changeDescription,
+    };
+    setForm((prev) => ({ ...prev, ...overrides }));
+    handleSubmit(e as unknown as React.FormEvent, overrides);
+  };
 
   const handleCategoryCreated = (cat: { id: string; label: string }) => {
     setCategoryFlat((prev) => [...prev, cat]);

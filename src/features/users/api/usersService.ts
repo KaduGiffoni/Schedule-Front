@@ -17,6 +17,8 @@ export interface User {
 }
 
 export interface UpdateProfileRequest {
+  // FIX: 4 — Inclusão de userId para garantir edição do usuário correto
+  userId?: string;
   email: string;
   completeName: string;
   surname: string;

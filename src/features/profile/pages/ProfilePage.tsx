@@ -126,6 +126,13 @@ export default function ProfilePage() {
       showToast("A nova senha e a confirmação não coincidem.", "warning");
       return;
     }
+
+    // FIX: 16 — Validação de força de senha
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!strongPasswordRegex.test(passwordData.newPassword)) {
+      showToast("A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, minúscula, um número e um caractere especial.", "error");
+      return;
+    }
     setIsSavingPassword(true);
     try {
       await usersService.changePassword({

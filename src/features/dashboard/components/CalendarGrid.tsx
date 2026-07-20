@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { scheduleService } from "../api/scheduleService";
 import { holidayService, type Holiday } from "../../settings/api/holidayService";
 import type { ScheduleDay } from "../types";
@@ -94,7 +94,8 @@ export const CalendarGrid = ({
     [shifts]
   );
 
-  const today = new Date();
+  // FIX: 11 — new Date() no render body cacheado via useMemo
+  const today = useMemo(() => new Date(), []);
 
   return (
     <div
@@ -158,7 +159,8 @@ export const CalendarGrid = ({
                 onKeyDown={(e) => e.key === "Enter" && setExpandedDay(day)}
                 onMouseEnter={() => onDayHover?.(day)}
                 onMouseLeave={() => onDayHover?.(null)}
-                className="rounded-xl border p-2.5 flex flex-col overflow-hidden cursor-pointer select-none outline-none min-h-[110px]"
+                // FIX: 14 — Uso de classes Tailwind em vez de eventos onMouseOver
+                className="rounded-xl border p-2.5 flex flex-col overflow-hidden cursor-pointer select-none outline-none min-h-[110px] transition-all duration-150 ease-out hover:shadow-md hover:-translate-y-[2px]"
                 style={{
                   backgroundColor: isToday
                     ? "var(--color-accent-subtle)"
@@ -167,16 +169,7 @@ export const CalendarGrid = ({
                     ? "var(--color-accent)"
                     : currentHoliday
                     ? "var(--color-warning)"
-                    : "var(--color-border-subtle)",
-                  transition: "all 150ms ease-out",
-                }}
-                onMouseOver={(e) => {
-                  (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-md)";
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-                }}
-                onMouseOut={(e) => {
-                  (e.currentTarget as HTMLElement).style.boxShadow = "none";
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                    : "var(--color-border-subtle)"
                 }}
               >
                 {/* Topo: número do dia, feriado e badge de ausência */}

@@ -27,8 +27,7 @@ export default function LoginPage() {
       const response = await authService.login(requestData);
 
       setTokenAndEmail(response.accessToken, email);
-      localStorage.setItem("token", response.accessToken);
-      localStorage.setItem("userEmail", email);
+      // FIX: 2 — localStorage redundante removido
 
       navigate("/dashboard");
     } catch (error: any) {

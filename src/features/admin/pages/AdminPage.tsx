@@ -67,11 +67,12 @@ const TABS: TabConfig[] = [
 ];
 
 // ── Tabela Genérica ────────────────────────────────────────────────────────────
+// FIX: 18 — Refatorando SectionTable para receber chaves únicas (id) em vez de array bidimensional simples
 const SectionTable = ({
   headers, rows, isLoading, emptyMsg, emptyIcon
 }: {
   headers: string[];
-  rows: React.ReactNode[][];
+  rows: { id: string | number; cells: React.ReactNode[] }[];
   isLoading: boolean;
   emptyMsg: string;
   emptyIcon?: React.ReactNode;
@@ -101,9 +102,10 @@ const SectionTable = ({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-[var(--color-surface-dim)] border-b border-[var(--color-border)]">
-              {headers.map((h) => (
+              {headers.map((h, i) => (
                 <th
-                  key={h}
+                  // FIX: 18 — Chave para header com índice para evitar problemas caso houver colunas duplicadas
+                  key={`${h}-${i}`}
                   className="px-5 py-3 text-[11px] font-bold text-[var(--color-text-faint)] uppercase tracking-wider whitespace-nowrap"
                 >
                   {h}
@@ -112,10 +114,11 @@ const SectionTable = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border-subtle)]">
-            {rows.map((cells, ri) => (
-              <tr key={ri} className="hover:bg-[var(--color-surface-raised)] transition-colors">
-                {cells.map((cell, ci) => (
-                  <td key={ci} className="px-5 py-3.5 text-[13px] text-[var(--color-text-muted)]">
+            {rows.map((row) => (
+              // FIX: 18 — Usando a chave única provida pelo objeto row
+              <tr key={row.id} className="hover:bg-[var(--color-surface-raised)] transition-colors">
+                {row.cells.map((cell, ci) => (
+                  <td key={`${row.id}-cell-${ci}`} className="px-5 py-3.5 text-[13px] text-[var(--color-text-muted)]">
                     {cell}
                   </td>
                 ))}
@@ -266,13 +269,16 @@ function CompaniesTab() {
         emptyMsg="Adicione uma empresa para começar."
         emptyIcon={<Building2 size={32} />}
         headers={["#", "Nome", "Tipo"]}
-        rows={items.map((c) => [
-          <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{c.id}</span>,
-          <span className="font-semibold text-[var(--color-text)]">{c.name}</span>,
-          <span className={`px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase ${c.isOutsource ? "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]" : "bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]"}`}>
-            {c.isOutsource ? "Terceirizada" : "Própria"}
-          </span>,
-        ])}
+        rows={items.map((c) => ({
+          id: c.id,
+          cells: [
+            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{c.id}</span>,
+            <span className="font-semibold text-[var(--color-text)]">{c.name}</span>,
+            <span className={`px-2 py-0.5 rounded-[4px] text-[10px] font-bold uppercase ${c.isOutsource ? "bg-[var(--color-warning-subtle)] text-[var(--color-warning)]" : "bg-[var(--color-accent-subtle)] text-[var(--color-accent-text)]"}`}>
+              {c.isOutsource ? "Terceirizada" : "Própria"}
+            </span>,
+          ]
+        }))}
       />
       {isOpen && (
         <Modal title="Nova Empresa" icon={<Building2 size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>
@@ -358,14 +364,17 @@ function SectorsTab() {
         rows={items.map((s) => {
           const co = companies.find((c) => c.id === s.companyId);
           const pat = patterns.find((p) => p.id === s.defaultShiftPatternId);
-          return [
-            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{s.id}</span>,
-            <span className="font-semibold text-[var(--color-text)]">{s.name}</span>,
-            co ? <span>{co.name}</span> : <span className="text-[var(--color-border)]">—</span>,
-            pat
-              ? <span className="text-[12px] font-mono">{pat.name ?? `Padrão #${pat.id}`}</span>
-              : <span className="text-[var(--color-border)]">—</span>,
-          ];
+          return {
+            id: s.id,
+            cells: [
+              <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{s.id}</span>,
+              <span className="font-semibold text-[var(--color-text)]">{s.name}</span>,
+              co ? <span>{co.name}</span> : <span className="text-[var(--color-border)]">—</span>,
+              pat
+                ? <span className="text-[12px] font-mono">{pat.name ?? `Padrão #${pat.id}`}</span>
+                : <span className="text-[var(--color-border)]">—</span>,
+            ]
+          };
         })}
       />
       {isOpen && (
@@ -473,18 +482,21 @@ function LettersTab() {
         headers={["#", "Nome", "Setor", "Offset", ""]}
         rows={items.map((l) => {
           const sec = sectors.find((s) => s.id === l.sectorId);
-          return [
-            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{l.id}</span>,
-            <span className="font-bold text-[var(--color-text)] text-[15px]">{l.name}</span>,
-            sec ? <span>{sec.name}</span> : <span className="text-[var(--color-border)]">—</span>,
-            <span className="font-mono text-[12px]">{l.patternOffset}</span>,
-            <button
-              onClick={() => openEdit(l)}
-              className="text-[12px] font-semibold text-[var(--color-accent)] hover:underline"
-            >
-              Editar
-            </button>,
-          ];
+          return {
+            id: l.id,
+            cells: [
+              <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{l.id}</span>,
+              <span className="font-bold text-[var(--color-text)] text-[15px]">{l.name}</span>,
+              sec ? <span>{sec.name}</span> : <span className="text-[var(--color-border)]">—</span>,
+              <span className="font-mono text-[12px]">{l.patternOffset}</span>,
+              <button
+                onClick={() => openEdit(l)}
+                className="text-[12px] font-semibold text-[var(--color-accent)] hover:underline"
+              >
+                Editar
+              </button>,
+            ]
+          };
         })}
       />
       {isOpen && (
@@ -568,15 +580,18 @@ function ShiftsTab() {
         emptyMsg="Nenhum turno cadastrado."
         emptyIcon={<Clock size={32} />}
         headers={["#", "Nome", "Início", "Fim", "Folga"]}
-        rows={items.map((s) => [
-          <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{s.id}</span>,
-          <span className="font-semibold text-[var(--color-text)]">{s.name}</span>,
-          <span className="font-mono text-[12px]">{s.startTime?.slice(0, 5) ?? "—"}</span>,
-          <span className="font-mono text-[12px]">{s.endTime?.slice(0, 5) ?? "—"}</span>,
-          s.isDayOff
-            ? <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[var(--color-success-subtle)] text-[var(--color-success)]">SIM</span>
-            : <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[var(--color-surface-dim)] text-[var(--color-text-muted)]">NÃO</span>,
-        ])}
+        rows={items.map((s) => ({
+          id: s.id,
+          cells: [
+            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{s.id}</span>,
+            <span className="font-semibold text-[var(--color-text)]">{s.name}</span>,
+            <span className="font-mono text-[12px]">{s.startTime?.slice(0, 5) ?? "—"}</span>,
+            <span className="font-mono text-[12px]">{s.endTime?.slice(0, 5) ?? "—"}</span>,
+            s.isDayOff
+              ? <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[var(--color-success-subtle)] text-[var(--color-success)]">SIM</span>
+              : <span className="px-2 py-0.5 rounded-[4px] text-[10px] font-bold bg-[var(--color-surface-dim)] text-[var(--color-text-muted)]">NÃO</span>,
+          ]
+        }))}
       />
       {isOpen && (
         <Modal title="Novo Turno" icon={<Clock size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>
@@ -685,12 +700,15 @@ function PatternsTab() {
         emptyMsg="Nenhum padrão de turno cadastrado."
         emptyIcon={<GitBranch size={32} />}
         headers={["#", "Nome", "Sequência (IDs)", "Sequência (Nomes)"]}
-        rows={items.map((p) => [
-          <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{p.id}</span>,
-          <span className="font-semibold text-[var(--color-text)]">{p.name ?? "—"}</span>,
-          <span className="font-mono text-[11px] bg-[var(--color-surface-dim)] px-2 py-0.5 rounded">{p.sequence}</span>,
-          <span className="text-[12px] text-[var(--color-text-muted)]">{parseSequence(p.sequence)}</span>,
-        ])}
+        rows={items.map((p) => ({
+          id: p.id,
+          cells: [
+            <span className="font-mono text-[12px] text-[var(--color-text-faint)]">#{p.id}</span>,
+            <span className="font-semibold text-[var(--color-text)]">{p.name ?? "—"}</span>,
+            <span className="font-mono text-[11px] bg-[var(--color-surface-dim)] px-2 py-0.5 rounded">{p.sequence}</span>,
+            <span className="text-[12px] text-[var(--color-text-muted)]">{parseSequence(p.sequence)}</span>,
+          ]
+        }))}
       />
       {isOpen && (
         <Modal title="Novo Padrão de Turno" icon={<GitBranch size={18} className="text-[var(--color-accent)]" />} onClose={() => setIsOpen(false)}>

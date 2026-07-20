@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { UserPlus, Filter, Save, Pencil, Loader2 } from "lucide-react";
+import { UserPlus, Save, Pencil, Loader2 } from "lucide-react";
 import { usersService, type User } from "../api/usersService";
 import { InputField } from "../../../components/ui/InputField";
 import { Button } from "../../../components/ui/Button";
@@ -59,9 +59,17 @@ export default function UsersPage() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingUser) return;
+    
     setIsSaving(true);
     try {
-      await usersService.updateProfile(formData);
+      // FIX: 4 — Garante que o email não foi modificado e envia userId
+      const payload = {
+        ...formData,
+        email: editingUser.user,
+        userId: editingUser.userId
+      };
+      await usersService.updateProfile(payload);
       await fetchUsers();
       setIsModalOpen(false);
       showToast("Perfil atualizado com sucesso!", "success");
@@ -96,19 +104,7 @@ export default function UsersPage() {
             </p>
           </div>
           <div style={{ display: "flex", gap: "10px" }}>
-            <button
-              style={{
-                display: "flex", alignItems: "center", gap: "8px",
-                padding: "0 16px", height: "40px",
-                backgroundColor: "var(--color-surface)",
-                border: "1px solid var(--color-border)",
-                borderRadius: "8px", fontSize: "13px",
-                fontWeight: 600, color: "var(--color-text-muted)",
-                cursor: "pointer", transition: "background-color 120ms",
-              }}
-            >
-              Filtrar por Equipe <Filter size={15} />
-            </button>
+            {/* FIX: 13 — Botão Filtrar por Equipe removido (Dead UI) */}
             <Button style={{ backgroundColor: "var(--color-accent)", color: "white", width: "auto", padding: "0 20px" }}>
               <UserPlus size={16} /> &nbsp;Adicionar
             </Button>
@@ -121,8 +117,9 @@ export default function UsersPage() {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
               <thead>
                 <tr style={{ backgroundColor: "var(--color-surface-dim)", borderBottom: "1px solid var(--color-border)" }}>
-                  {["Nome Completo", "Sobrenome", "Matrícula", "Equipe", "Status", "E-mail", ""].map((h, i) => (
-                    <th key={i} style={{ ...thStyle, textAlign: h === "" ? "center" : "left" }}>{h}</th>
+                  {["Nome Completo", "Sobrenome", "Matrícula", "Equipe", "Status", "E-mail", ""].map((h) => (
+                    // FIX: 18 — uso de string única como key
+                    <th key={h || "actions"} style={{ ...thStyle, textAlign: h === "" ? "center" : "left" }}>{h}</th>
                   ))}
                 </tr>
               </thead>

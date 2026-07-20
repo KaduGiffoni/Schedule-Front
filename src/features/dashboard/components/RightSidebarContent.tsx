@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Tent, PartyPopper, CalendarDays, ChevronLeft, Info, UserCheck } from "lucide-react";
 import { scheduleService } from "../api/scheduleService";
 import { usersService, type User } from "../../users/api/usersService";
@@ -61,16 +61,24 @@ export const RightSidebarContent = ({
   const { letters, fetchLetters } = useLettersStore();
   useEffect(() => { fetchLetters(); }, [fetchLetters]);
 
-  const today = new Date();
-  const formattedToday = `${today.getDate()} ${MONTHS_PT[today.getMonth()].slice(0, 3)}`;
+  // FIX: 5 — useMemo para instanciar a data do render
+  const { todayRender, formattedToday } = useMemo(() => {
+    const d = new Date();
+    return {
+      todayRender: d,
+      formattedToday: `${d.getDate()} ${MONTHS_PT[d.getMonth()].slice(0, 3)}`
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const todayMonth = today.getMonth() + 1;
-        const todayYear = today.getFullYear();
+        // FIX: 5 — instanciando data fresca no closure do fetchData
+        const currentToday = new Date();
+        const todayMonth = currentToday.getMonth() + 1;
+        const todayYear = currentToday.getFullYear();
         const isSameMonth = todayYear === viewedYear && todayMonth === viewedMonth;
 
         const [todayData, viewedData, usersRes, holidaysRes] = await Promise.all([
@@ -118,7 +126,7 @@ export const RightSidebarContent = ({
   };
 
   // Dados de Hoje
-  const todayDayNum = today.getDate();
+  const todayDayNum = todayRender.getDate();
   const shiftsForRealToday = todayShifts.filter((s) => parseShiftDay(s.date) === todayDayNum);
   const workingUsersToday = users.filter((u) =>
     shiftsForRealToday.find((s) => Number(s.letterId) === Number(u.letterId) && !s.isDayOff)

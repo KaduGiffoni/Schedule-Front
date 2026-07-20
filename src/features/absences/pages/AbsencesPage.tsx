@@ -89,15 +89,19 @@ export default function AbsencesPage() {
   // ── Fetch de usuários (para substituto / targetUserId) ────────────────────────
   useEffect(() => {
     if (!canFetchUsers) return;
+    let cancelled = false;
     usersService
       .getAllUsers()
-      .then(setUsers)
+      .then((data) => {
+        if (!cancelled) setUsers(data);
+      })
       .catch((err) => {
-        if (axios.isAxiosError(err) && err.response?.status === 403) {
+        if (!cancelled && axios.isAxiosError(err) && err.response?.status === 403) {
           // Standard user — esconde o campo de substituto graciosamente
           setCanFetchUsers(false);
         }
       });
+    return () => { cancelled = true; };
   }, [canFetchUsers]);
 
   // ── Sincronizar endDate = startDate ao mudar tipo para CompensacaoHora ───────

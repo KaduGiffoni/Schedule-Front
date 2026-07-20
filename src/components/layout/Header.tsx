@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
-  Search,
   Bell,
   User as UserIcon,
   LogOut,
@@ -94,20 +93,25 @@ export const Header = () => {
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   // ── Fetch de notificações ────────────────────────────────────────────────────
-  const fetchNotifications = useCallback(async () => {
+  // FIX: 6 — AbortController adicionado ao polling
+  const fetchNotifications = useCallback(async (signal?: AbortSignal) => {
     try {
-      const data = await notificationsService.getNotifications().catch(() => null);
-      setNotifications(data ?? []);
+      const data = await notificationsService.getNotifications(signal).catch(() => null);
+      if (!signal?.aborted) setNotifications(data ?? []);
     } catch {
       // Silencia erros de rede — o sino fica sem badge
     }
   }, []);
 
   useEffect(() => {
-    fetchNotifications();
-    // Polling a cada 60s (mais conservador que o padrão anterior de 120s)
-    const interval = setInterval(fetchNotifications, 60_000);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    fetchNotifications(controller.signal);
+    // Polling a cada 60s
+    const interval = setInterval(() => fetchNotifications(controller.signal), 60_000);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [fetchNotifications]);
 
   // ── Marcar uma notificação como lida ────────────────────────────────────────
@@ -167,8 +171,7 @@ export const Header = () => {
   }, []);
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("userEmail");
+    // FIX: 2 — localStorage redundante removido no logout
     useAuthStore.getState().logout?.();
     setIsDropdownOpen(false);
     navigate("/");
@@ -196,36 +199,8 @@ export const Header = () => {
         borderBottom: "1px solid var(--color-header-border)",
       }}
     >
-      {/* ── Campo de busca ─────────────────────────────────────────── */}
-      <div className="flex-1 max-w-[400px]">
-        <div className="relative">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-            size={15}
-            style={{ color: "var(--color-text-faint)" }}
-          />
-          <input
-            type="search"
-            placeholder="Buscar turnos ou pessoal..."
-            className="w-full h-9 pl-9 pr-4 text-[13px] rounded-[6px]"
-            style={{
-              backgroundColor: "var(--color-surface-dim)",
-              border: "1px solid var(--color-border)",
-              color: "var(--color-text)",
-              outline: "none",
-              transition: "border-color 150ms ease-out, box-shadow 150ms ease-out",
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = "var(--color-accent)";
-              e.target.style.boxShadow = "0 0 0 3px var(--color-accent-dim)";
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = "var(--color-border)";
-              e.target.style.boxShadow = "none";
-            }}
-          />
-        </div>
-      </div>
+      {/* FIX: 13 — Campo de busca removido */}
+      <div className="flex-1 max-w-[400px]" />
 
       {/* ── Ações direita ───────────────────────────────────────────── */}
       <div className="flex items-center gap-1.5">

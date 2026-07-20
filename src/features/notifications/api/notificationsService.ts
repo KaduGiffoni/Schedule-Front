@@ -6,9 +6,20 @@ export const notificationsService = {
    * GET /api/notifications
    * GET /api/notifications?onlyUnread=true  — só as não lidas
    */
-  getNotifications: async (options?: { onlyUnread?: boolean }): Promise<Notification[]> => {
+  // FIX: 6 — AbortSignal repassado ao Axios
+  getNotifications: async (
+    signalOrOptions?: AbortSignal | { onlyUnread?: boolean },
+    signal?: AbortSignal
+  ): Promise<Notification[]> => {
+    const isSignal = signalOrOptions instanceof AbortSignal;
+    const actualSignal = isSignal ? signalOrOptions : signal;
+    const options = isSignal ? undefined : signalOrOptions;
+
     const params = options?.onlyUnread ? { onlyUnread: true } : undefined;
-    const response = await api.get<Notification[]>("/api/notifications", { params });
+    const response = await api.get<Notification[]>("/api/notifications", {
+      params,
+      signal: actualSignal,
+    });
     return response.data;
   },
 

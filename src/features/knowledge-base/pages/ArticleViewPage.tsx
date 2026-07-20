@@ -30,6 +30,7 @@ import {
 import { Button } from '../../../components/ui/Button';
 import { useToastStore } from '../../../lib/toastStore';
 import { useHasRole } from '../../../lib/useHasRole';
+import { useSanitizedHtml } from '../../../lib/useSanitizedHtml';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -188,6 +189,9 @@ export default function ArticleViewPage() {
   const [isFavLoading, setIsFavLoading] = useState(false);
   const [isReadLoading, setIsReadLoading] = useState(false);
 
+  // FIX: 1 — sanitização DOMPurify adicionada
+  const safeHtml = useSanitizedHtml(processTerminalContent(article?.content ?? ''));
+
   // Ref para o div do conteúdo do artigo (usado para injetar botões copiar)
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -283,9 +287,6 @@ export default function ArticleViewPage() {
   useEffect(() => {
     if (!contentRef.current || !article) return;
 
-    const COPY_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
-    const CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-
     const blocks = contentRef.current.querySelectorAll<HTMLElement>('pre.kb-terminal-pre');
     blocks.forEach((pre) => {
       // Evita duplicar botões em re-renders
@@ -295,15 +296,16 @@ export default function ArticleViewPage() {
       btn.className = 'kb-copy-btn';
       btn.type = 'button';
       btn.title = 'Copiar código';
-      btn.innerHTML = COPY_SVG;
+      // FIX: 15 — btn.innerHTML removido
+      btn.textContent = '📋';
 
       btn.onclick = () => {
         const code = pre.querySelector('code');
         // Extrai o texto puro (sem o "> " do ::before)
         const text = (code?.textContent ?? '').replace(/^> /gm, '');
         navigator.clipboard.writeText(text).catch(() => {});
-        btn.innerHTML = CHECK_SVG;
-        setTimeout(() => { btn.innerHTML = COPY_SVG; }, 2000);
+        btn.textContent = '✅';
+        setTimeout(() => { btn.textContent = '📋'; }, 2000);
       };
 
       pre.appendChild(btn);
@@ -545,7 +547,7 @@ export default function ArticleViewPage() {
           <div
             ref={contentRef}
             className="kb-content"
-            dangerouslySetInnerHTML={{ __html: processTerminalContent(article.content ?? '') }}
+            dangerouslySetInnerHTML={{ __html: safeHtml }}
           />
         </div>
 
